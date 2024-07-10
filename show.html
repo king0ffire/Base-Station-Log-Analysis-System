@@ -1,0 +1,33 @@
+
+<html>
+<head>
+    <title>results</title>
+</head>
+<body>
+<h1>
+    Your results
+</h1>
+<a href="{{.Downloadlink}}" download>Download Link
+</a>
+<br>
+<table>
+    <tr>
+      {{range .Header1}}
+      <th>{{.}}</th>
+      {{end}}
+    </tr>
+    
+        {{range .Data1}}
+        <tr>
+        {{range .}}
+      <td>{{.}}</td>
+        {{end}}
+    </tr>
+        {{end}}
+
+
+  </table>
+</form>
+</body>
+</html>
+
