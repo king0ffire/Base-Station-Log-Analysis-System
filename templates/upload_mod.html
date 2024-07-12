@@ -1,0 +1,16 @@
+<body>
+<link rel="stylesheet" href="/static/upload_mod.css" />
+<div class="file-upload">
+  <button class="file-upload-btn" type="button" onclick="$('.file-upload-input').trigger( 'click' )">Add your log_*.gz file</button>
+
+  <div class="image-upload-wrap">
+    <input class="file-upload-input" type='file' onchange="readURL(this);" accept=".gz" />
+    <div class="drag-text">
+      <h3>Drag and drop here</h3>
+    </div>
+  </div>
+  <progress id="uploadprogress" min="0" max="100" value="0">0</progress>
+</div>
+<script src="/static/jquery-3.7.1.min.js"></script>
+<script src="/static/upload_mod.js"></script>
+</body>

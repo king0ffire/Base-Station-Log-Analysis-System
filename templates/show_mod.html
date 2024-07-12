@@ -1,0 +1,52 @@
+<html>
+
+<head>
+  <title>results</title>
+  <link rel="stylesheet" href="/static/upload_mod.css" />
+</head>
+
+<body>
+  <h1>
+    {{.Htmlheader}}
+  </h1>
+
+  <a href="{{.Downloadlink}}" download>
+    <button id="textdbg" class="file-download-btn" type="button">下载</button>
+  </a>
+
+  <br>
+  <table>
+    <tr id="header" style="text-align: center;">
+      {{range .Header}}
+      <th>{{.}}</th>
+      {{end}}
+    </tr>
+    <tbody id="content">
+      {{range .Data}}
+      <tr style="text-align: center;">
+        {{range .}}
+        <td>{{.}}</td>
+        {{end}}
+      </tr>
+      {{end}}
+    </tbody>
+
+  </table>
+  </form>
+  <script>
+    const headcolors = ["#FFB7DD", "#FFC8B4", "#FFEE99", "#EEFFBB", "#99FF99", "#AAFFEE", "#CCDDFF", "#CCBBFF", "#E8CCFF"];
+    const linecolors = ["#FFFFFF", "#DDDDDD"];
+    const headerrow = document.getElementById("header")
+    const headercell = headerrow.getElementsByTagName("th")
+    for (let i = 0; i < headercell.length; i++) {
+      headercell[i].style.backgroundColor = headcolors[i % headcolors.length]
+    }
+    const contentall = document.getElementById("content")
+    const contentrows = contentall.getElementsByTagName("tr")
+    for (let i = 0; i < contentrows.length; i++) {
+      contentrows[i].style.backgroundColor = linecolors[i % linecolors.length]
+    }
+  </script>
+</body>
+
+</html>

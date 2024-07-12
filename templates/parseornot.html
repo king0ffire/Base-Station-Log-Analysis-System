@@ -1,0 +1,34 @@
+
+<html>
+<head>
+    <title>Choose your result</title>
+</head>
+<body>
+<a href="/results/dbg?filename={{.Filename}}" role="button">dbglog files count
+</a>
+<div id="text">
+diowqjdio
+</div>
+
+<a href="/results/ids?filename={{.Filename}}" role="button">sctp events list
+</a>
+</form>
+<script>
+    const url={{.URL}};
+    const myWebSocket = new WebSocket("ws://"+url+"/ws");
+    myWebSocket.onopen=function(e){
+        myWebSocket.send({{.Filename}})
+       console.log("open")
+    }
+    myWebSocket.onmessage = function (e) {
+        updateinnerHTML(e)
+    };
+    function updateinnerHTML(e){
+        var jsondata=JSON.parse(e.data);
+        document.getElementById("text").innerHTML=jsondata["Max"]+" "+jsondata["Current"]
+    }
+</script>
+</body>
+
+</html>
+

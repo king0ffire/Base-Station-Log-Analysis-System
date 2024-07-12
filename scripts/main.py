@@ -40,6 +40,7 @@ def run(filelocation):
     #print("dbg start!")
     fourEqualPattern = r"====[^\[]*"
     fiveDashPattern = r"-{5,}[^-\[\n]*"
+    csvwriter_dbg.writerow(['Event Name','Counts'])
     countmap=counter_FileListby2patterns(dbg_file_list,fourEqualPattern,fiveDashPattern)
     for (key,value) in countmap.items():
         csvwriter_dbg.writerow([key,value])
@@ -48,7 +49,7 @@ def run(filelocation):
     
     
     #print("sctp start!")
-    csvwriter_id.writerow(['filename','packet number','time','source IP','destination IP','protocol','summary info','MME-ID','ENB-ID'])
+    csvwriter_id.writerow(['Filename','Pkt Num','Time','Source IP','Destination IP','Protocol','Summary Info','MME-ID','ENB-ID'])
     for i,filename in enumerate(sctp_file_list):
         if filename[-3:]=='.gz':
             with gzip.open(filename) as f:

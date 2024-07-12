@@ -1,0 +1,44 @@
+
+<html>
+<head>
+    <title>Choose your result</title>
+    <link rel="stylesheet" href="/static/upload_mod.css" />
+</head>
+<body>
+
+    <div class="file-upload">
+        <button id="textdbg" class="file-upload-btn" type="button" onclick="window.location.href='/results/dbg?filename={{.Filename}}'">查询dbglog的event统计(未完成)</button>
+        <br>
+        <br>
+        <br>
+        <button id="textids" class="file-upload-btn" type="button" onclick="window.location.href='/results/ids?filename={{.Filename}}'">查询sctp捕获文件的信息统计(未完成)</button>
+</div>
+
+<script>
+    const url={{.URL}};
+    const myWebSocket = new WebSocket("ws://"+url+"/ws");
+    myWebSocket.onopen=function(e){
+        myWebSocket.send({{.Filename}})
+       console.log("open")
+    }
+    myWebSocket.onmessage = function (e) {
+        updateinnerHTML(e)
+    };
+    function updateinnerHTML(e){
+        var jsondata=JSON.parse(e.data);
+        if (jsondata["Max"]!=0){
+            document.getElementById("textdbg").innerHTML="查询dbglog的event统计(已完成)";
+        }
+        if(jsondata["Current"]!=jsondata["Max"]){
+            document.getElementById("textids").innerHTML="查询sctp捕获文件的信息统计(已处理"+jsondata["Current"]/jsondata["Max"]*100+"%)"
+        }
+        if(jsondata["Max"]!=0&&jsondata["Current"]==jsondata["Max"])
+        {
+            document.getElementById("textids").innerHTML="查询sctp捕获文件的信息统计(已完成)"    
+        }
+    }
+</script>
+</body>
+
+</html>
+
