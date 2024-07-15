@@ -3,6 +3,10 @@
 <head>
   <title>results</title>
   <link rel="stylesheet" href="/static/upload_mod.css" />
+  <link href="../../static/bootstrap-3.3.5/css/bootstrap.min.css" rel="stylesheet" type="text/css"/>
+    <link href="../../static/bootstrap-3.3.5/css/bootstrap-theme.min.css" rel="stylesheet" type="text/css"/>
+    <!--jQuery-UI-->
+    <link type="text/css" href="../../static/jquery-ui-bootstrap/css/custom-theme/jquery-ui-1.10.0.custom.css" rel="stylesheet" />
 </head>
 
 <body>
@@ -11,11 +15,11 @@
   </h1>
 
   <a href="{{.Downloadlink}}" download>
-    <button id="textdbg" class="file-download-btn" type="button">下载</button>
+    <button id="textdbg" class="btn btn-success" type="button">下载</button>
   </a>
 
   <br>
-  <table>
+  <table style="float: left;">
     <tr id="header" style="text-align: center;">
       {{range .Header}}
       <th>{{.}}</th>

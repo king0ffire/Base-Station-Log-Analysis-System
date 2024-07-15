@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head lang="en">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>详细信息</title>
+
+    <link href="../../static/bootstrap-3.3.5/css/bootstrap.min.css" rel="stylesheet" type="text/css" />
+    <link href="../../static/bootstrap-3.3.5/css/bootstrap-theme.min.css" rel="stylesheet" type="text/css" />
+    <!--jQuery-UI-->
+    <link type="text/css" href="../../static/jquery-ui-bootstrap/css/custom-theme/jquery-ui-1.10.0.custom.css"
+        rel="stylesheet" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        .error-code {
+            font-family: 'Creepster', cursive, arial, helvetica, sans-serif;
+            font-size: 200px;
+            color: white;
+            color: rgba(255, 255, 255, 0.98);
+            width: 50%;
+            text-align: right;
+            margin-top: 5%;
+            text-shadow: 5px 5px hsl(0, 0%, 25%);
+            float: left;
+        }
+
+        .not-found {
+            width: 47%;
+            float: right;
+            margin-top: 5%;
+            font-size: 50px;
+            color: white;
+            text-shadow: 2px 2px 5px hsl(0, 0%, 61%);
+            padding-top: 70px;
+        }
+
+        .clear {
+            float: none;
+            clear: both;
+        }
+
+        .content {
+            text-align: center;
+            line-height: 30px;
+        }
+
+        input[type=text] {
+            border: hsl(247, 89%, 72%) solid 1px;
+            outline: none;
+            padding: 5px 3px;
+            font-size: 16px;
+            border-radius: 8px;
+        }
+
+        a {
+            text-decoration: none;
+            color: #9ECDFF;
+            text-shadow: 0px 0px 2px white;
+        }
+
+        a:hover {
+            color: white;
+        }
+    </style>
+
+    
+</head>
+
+<body>
+    <br>
+    <div class="container">
+        <h2 class="text-center">dbglog详细信息</h2>
+    </div>
+    <br>
+
+    <div class="container">
+        <form class="form-inline" method="get" action="/results/dbg">
+            <div class="form-group">
+                <label for="proto">文件名 : </label>&nbsp;&nbsp;
+                <input type="text" class="form-control" id="proto" name="filename" value="">&nbsp;&nbsp;
+            </div>
+            <button type="submit" class="btn btn-success">&nbsp;查&nbsp;&nbsp;&nbsp;看&nbsp;</button>&nbsp;&nbsp;
+        </form>
+    </div>
+
+    <br>
+
+    <div class="bs-example" data-example-id="hoverable-table"  >
+        {{if eq .Downloadlink ""}}
+        <p id="instruction">请通过文件名搜索需要展示的结果</p>
+        {{else}}
+        {{if .Header}}
+        <a href="{{.Downloadlink}}" download>
+            <button id="textdbg" class="btn btn-success" type="button">下载</button>
+        </a>
+        <br>
+        <table class="table table-hover table-responsive  table-condensed table-striped" id="table" style="width:30%;float:left">
+            <thead>
+                <tr>
+                    {{range .Header}}
+                    <th class="text-center">{{.}}</th>
+                    {{end}}
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Data}}
+                <tr>
+                    {{range .}}
+                    <td class="text-center">{{.}}</td>
+                    {{end}}
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <p class="error-code">
+            404
+        </p>
+        <p class="not-found">Not<br />Found</p>
+        <div class="clear"></div>
+        <div class="content">
+            您访问的页面不在地球上......
+        </div>
+        {{end}}
+        {{end}}
+        <div class="container" id="eventbar" style="height: 800px; width: 70%;float: left;"></div>
+    </div>
+    
+
+    <script>
+        function geturlparameter(name) {
+            name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+            var regex = new RegExp("[\\?&]" + name + "=([^&#]*)");
+            var results = regex.exec(location.search);
+            return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+        };
+        document.getElementById("proto").value = geturlparameter("filename");
+    </script>
+
+<script src="../../static/echarts.min.js"></script>
+<script>
+var chartDom = document.getElementById('eventbar');
+var myChart = echarts.init(chartDom);
+var option;
+        option = {
+            dataset: {
+                source: [
+                    ["{{index .Header 0}}", "{{index .Header 1}}"],
+                    {{range .Data}}
+                    ["{{index . 0}}", "{{index . 1}}"],
+                    {{end}}
+                        ]
+            },
+        grid: { containLabel: true },
+        xAxis: { name: 'amount' },
+        yAxis: { type: 'category' ,inverse:true},
+        series: [
+            {
+                type: 'bar',
+                encode: {
+                    x: 'Count',
+                    y: 'Event Name'
+                }
+            }
+        ]
+};
+        option && myChart.setOption(option);
+    </script>
+
+    <script src="../../static/bootstrap-3.3.5/js/jquery-1.11.3.min.js" type="text/javascript"></script>
+    <script src="../../static/bootstrap-3.3.5/js/bootstrap.min.js" type="text/javascript"></script>
+    <script src="../../static/jquery-ui-bootstrap/assets/js/jquery-ui-1.10.0.custom.min.js"
+        type="text/javascript"></script>
+    <!--清除过滤器-->
+
+
+</body>
+
+</html>

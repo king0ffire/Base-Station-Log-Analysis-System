@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head lang="en">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>基本信息</title>
+
+    <link href="../../static/bootstrap-3.3.5/css/bootstrap.min.css" rel="stylesheet" type="text/css"/>
+    <link href="../../static/bootstrap-3.3.5/css/bootstrap-theme.min.css" rel="stylesheet" type="text/css"/>
+    <!--jQuery-UI-->
+    <link type="text/css" href="../../static/jquery-ui-bootstrap/css/custom-theme/jquery-ui-1.10.0.custom.css" rel="stylesheet" />
+
+</head>
+<body>
+<br>
+<div class="container">
+    <h2 class="text-center">数据包基本信息</h2>
+</div>
+<br>
+
+<div class="container">
+  <form class="form-inline" method="get" action="/uploadedfiles">
+  <div class="form-group">
+    <label for="proto">文件名过滤 : </label>&nbsp;&nbsp;
+    <input type="text" class="form-control" id="proto" name="filename" value="">&nbsp;&nbsp;
+  </div>
+  <button type="submit" class="btn btn-success">&nbsp;过&nbsp;&nbsp;&nbsp;滤&nbsp;</button>&nbsp;&nbsp;
+        <button type="submit" class="btn btn-info cancle">&nbsp;清&nbsp;&nbsp;&nbsp;除&nbsp;</button>
+</form>
+</div>
+
+<br>
+<div class="bs-example" data-example-id="hoverable-table">
+    <table class="table table-hover table-responsive  table-condensed table-striped" id="table">
+      <thead>
+        <tr>
+            <th class="text-center">文件名</th>
+            <th class="text-center">dbglog文件处理状态</th>
+            <th class="text-center">sctp文件处理状态</th>
+            <th class="text-center">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr data-toggle="modal" data-target="#myModal">
+      <th scope="row" class="text-center" id="id"></th>
+          <td class="text-nowrap text-center"></td>
+          <td class="text-center"></td>
+          <td class="text-center"></td>
+
+        </tr>
+
+      </tbody>
+    </table>
+</div>
+
+
+
+
+<script src="../../static/bootstrap-3.3.5/js/jquery-1.11.3.min.js" type="text/javascript"></script>
+<script src="../../static/bootstrap-3.3.5/js/bootstrap.min.js" type="text/javascript"></script>
+<script src="../../static/jquery-ui-bootstrap/assets/js/jquery-ui-1.10.0.custom.min.js" type="text/javascript"></script>
+<!--清除过滤器-->
+<script>
+    $(".cancle").click(function(){
+        $("input").val(null);
+    })
+</script>
+<!--table点击事件-->
+<script>
+    var id=0;
+    $(function () {
+    $("table > tbody > tr").click(function () {
+        id=$(this).children('th').eq(0).text();
+        $.ajax({
+        type: "GET",//jquery 请求方式为 get
+        url: "/datashow?id="+id,//jquery 请求URL
+        dataType: "html",//jquery接受类型 可以 json js html 等数据
+        cache: false,//是否缓存
+        success: function(a) {
+            $(".mydata").html(a);
+        }
+    });
+    });
+})
+
+    function savepdf()
+    {
+        $.ajax({
+        type: "GET",//jquery 请求方式为 get
+        url: "/savepdf?id="+id,//jquery 请求URL
+        dataType: "html",//jquery接受类型 可以 json js html 等数据
+        cache: false,//是否缓存
+    });
+    }
+</script>
+<!--自动补全-->
+<script>
+    var availableTags = ["TCP", "UDP", "ARP", "ICMP", "HTTP", "HTTPS", "DNS", "SSH", "Telnet", "POP3", "SNMP", "SMTP"];
+    $("#proto").autocomplete({
+        source: availableTags
+    });
+</script>
+<!--模态框拖拽-->
+<script>
+    $("#myModal").draggable({
+    handle: ".modal-header"
+});
+</script>
+
+<script>
+  function geturlparameter(name){
+    name=name.replace(/[\[]/,'\\[').replace(/[\]]/,'\\]');
+    var regex =new RegExp("[\\?&]"+name+"=([^&#]*)");
+    var results=regex.exec(location.search);
+    return results===null?'':decodeURIComponent(results[1].replace(/\+/g,' '));
+  };
+  document.getElementById("proto").value=geturlparameter("filename");
+  const host=window.location.host;
+  const myWebSocket = new WebSocket("ws://"+host+"/ws");
+  myWebSocket.onopen=function(e){
+    myWebSocket.send(document.getElementById("proto").value)
+     console.log("open:"+document.getElementById("proto").value)
+  }
+  myWebSocket.onmessage = function (e) {
+      updateinnerHTML(e)
+  };
+  var tbody = document.createElement('tbody')
+  function updateonetablerow(value)
+  {
+    var row=tbody.insertRow();
+    var cell1=row.insertCell(0);
+    var filename=value["Filename"];
+    cell1.innerHTML=filename;
+    cell1.setAttribute("class","text-center")
+    var current=value["Current"]
+    var max =value["Max"]
+    var cell2=row.insertCell(1);
+    if (max!=0){
+      cell2.innerHTML="已完成";
+    }else{
+      cell2.innerHTML="未完成";
+    }
+    cell2.setAttribute("class","text-center")
+    var cell3=row.insertCell(2);
+    if(max==0)
+    {
+      cell3.innerHTML="未完成";
+    }else if(current!=max){
+      cell3.innerHTML="已处理"+current/max*100+"%";
+    }else{
+      cell3.innerHTML="已完成";
+    }
+    cell3.setAttribute("class","text-center")
+    var cell4=row.insertCell(3);
+    var button1 = document.createElement("button");
+    var button2 = document.createElement("button");
+    button1.setAttribute("class","btn btn-success")
+    button2.setAttribute("class","btn btn-success")
+    button1.addEventListener("click",function(){
+      window.location.href="/results/dbg?filename="+filename
+    })
+    button2.addEventListener("click",function(){
+      window.location.href="/results/ids?filename="+filename
+    })
+    button1.innerHTML="查看dbglog文件统计";
+    button2.innerHTML="查看sctp文件统计";
+    cell4.appendChild(button1);
+    cell4.appendChild(document.createTextNode(" "));
+    cell4.appendChild(button2);
+    cell4.setAttribute("class","text-center")
+  };
+  function updateinnerHTML(e){
+      var jsondata=JSON.parse(e.data);
+      tbody=document.createElement('tbody')
+      const table = document.getElementById("table")
+      jsondata.forEach(updateonetablerow);
+      table.replaceChild(tbody, table.getElementsByTagName("tbody")[0]);
+  };
+  
+</script>
+
+</body>
+</html>
