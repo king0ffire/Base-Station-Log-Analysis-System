@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"webapp/util"
+	"webapp/util/session"
 
 	"github.com/gorilla/websocket"
 )
@@ -19,6 +20,8 @@ const localhosturl = "localhost:9090"
 
 func indexentry(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
+		session.SessionInit(w, r)
+
 		t, err := template.ParseFiles("./templates/home/index.html")
 		if err != nil {
 			fmt.Println(err)
@@ -68,6 +71,7 @@ func upload(w http.ResponseWriter, r *http.Request) {
 				util.FileStatusMapLock.Unlock()
 			}
 		}
+		session.SessionAddFileHistory(w, r, handler.Filename)
 		fmt.Println("redirect success")
 		http.Redirect(w, r, "/uploadedfiles?filename="+handler.Filename, http.StatusSeeOther)
 	} else {
@@ -153,15 +157,21 @@ func sockethandler_withfilter(w http.ResponseWriter, r *http.Request) {
 	util.SocketManagerAdd(filter, conn)
 	defer util.SocketManagerDelete(conn)
 	//建立连接后首先先把当前信息都导一下
-	filteredfilestatuslist := []*util.FileStatus{}
-	util.FileStatusMapLock.RLock()
-	for k, v := range util.FileStatusMap {
-		if strings.Contains(k, filter) {
-			filteredfilestatuslist = append(filteredfilestatuslist, v)
-		}
+	Filelist, err := session.SessionFileHistoryFilter(r)
+	if err != nil {
+		fmt.Println("filtering retrieve fail:", err)
+		return
 	}
+	Filelist = util.FileListNameFilter(Filelist, filter)
+	util.FileStatusMapLock.RLock()
+	filteredfilestatus := util.StringListToMapValue(Filelist, util.FileStatusMap)
 	util.FileStatusMapLock.RUnlock()
-	conn.WriteJSON(filteredfilestatuslist)
+	/*
+		util.FileStatusMapLock.RLock()
+		filteredfilestatuslist := util.FileStatusMapNameFilter(util.FileStatusMap, filter)
+		util.FileStatusMapLock.RUnlock()
+	*/
+	conn.WriteJSON(filteredfilestatus)
 	//关闭网页后这段就会退出
 	for {
 		_, _, err := conn.ReadMessage()

@@ -28,6 +28,32 @@ var SocketStatusManager = make(map[*websocket.Conn]string)
 var FileStatusMapLock sync.RWMutex
 var SocketStatusManagerLock sync.RWMutex
 
+func FileListNameFilter(FileList []string, filter string) []string {
+	result := []string{}
+	for _, v := range FileList {
+		if strings.Contains(v, filter) {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+func FileStatusMapNameFilter(FileStatusMap map[string]*FileStatus, filter string) []*FileStatus {
+	filteredfilestatuslist := []*FileStatus{}
+	for k, v := range FileStatusMap {
+		if strings.Contains(k, filter) {
+			filteredfilestatuslist = append(filteredfilestatuslist, v)
+		}
+	}
+	return filteredfilestatuslist
+}
+func StringListToMapValue(StringList []string, TargetMap map[string]*FileStatus) []*FileStatus {
+	result := []*FileStatus{}
+	for _, v := range StringList {
+		result = append(result, TargetMap[v])
+	}
+	return result
+}
+
 func CheckFileExist(filename string) (int, int, bool) {
 	FileStatusMapLock.RLock()
 	value, err := FileStatusMap[filename]
