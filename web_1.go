@@ -1,37 +1,21 @@
 package main
 
 import (
-	"bufio"
-	"encoding/csv"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
-	"sort"
-	"strconv"
 	"strings"
-	"sync"
+	"webapp/util"
 
 	"github.com/gorilla/websocket"
 )
 
 const uploadpath = "./cache"
 const localhosturl = "localhost:9090"
-
-type FileStatus struct {
-	Filename string
-	Max      int
-	Current  int
-}
-
-var FileStatusMap = make(map[string]*FileStatus) //for ids file
-var socketStatusManager = make(map[*websocket.Conn]string)
-var lock sync.RWMutex
-var lock2 sync.RWMutex
 
 func indexentry(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
@@ -60,7 +44,7 @@ func upload(w http.ResponseWriter, r *http.Request) {
 		defer file.Close()
 
 		_, err = os.Stat("./cache/" + handler.Filename)
-		if true { //err != nil {
+		if err != nil {
 			cachefile, err := os.Create("./cache/" + handler.Filename)
 			if err != nil {
 				fmt.Println("open new fail:", err)
@@ -73,7 +57,16 @@ func upload(w http.ResponseWriter, r *http.Request) {
 				fmt.Println("cache fail:", err)
 				return
 			}
-			parsethefile(handler.Filename)
+			util.ParseFile(handler.Filename, uploadpath)
+		} else {
+			fmt.Println("file already exists, skip parsing")
+			max, current, existence := util.CheckFileExist(handler.Filename)
+			if !existence {
+				fmt.Println("file created before web init")
+				util.FileStatusMapLock.Lock()
+				util.FileStatusMap[handler.Filename] = &util.FileStatus{Filename: handler.Filename, Max: max, Current: current}
+				util.FileStatusMapLock.Unlock()
+			}
 		}
 		fmt.Println("redirect success")
 		http.Redirect(w, r, "/uploadedfiles?filename="+handler.Filename, http.StatusSeeOther)
@@ -92,43 +85,6 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func parsethefile(Filename string) {
-	pythoncmd := exec.Command("python", "./scripts/main.py", filepath.Join(uploadpath, Filename))
-	outpipe, _ := pythoncmd.StdoutPipe()
-	if err := pythoncmd.Start(); err != nil {
-		fmt.Println("start python fail:", err)
-		return
-	}
-	scanner := bufio.NewScanner(outpipe)
-	lock.Lock()
-	FileStatusMap[Filename] = &FileStatus{Filename: Filename, Max: 0, Current: 0}
-	lock.Unlock()
-	//announceSocketsOfFile(Filename)
-	go func() {
-		fmt.Println("Go thread start:", Filename)
-		scanner.Scan()
-		fmt.Println("Received first line of exection:", Filename, ":", scanner.Text())
-		intText, err := strconv.Atoi(scanner.Text())
-		if err != nil {
-			fmt.Println("text conversion:", err)
-			return
-		}
-		lock.Lock()
-		FileStatusMap[Filename].Max = intText
-		lock.Unlock()
-		announceAllSocketsWithFilter()
-		for scanner.Scan() {
-			fmt.Println("python outputs:", scanner.Text())
-			if scanner.Text() == "sctp_finished_one" {
-				lock.Lock()
-				FileStatusMap[Filename].Current++
-				lock.Unlock()
-				announceAllSocketsWithFilter()
-			}
-		}
-		fmt.Println("Go thread end:", Filename)
-	}()
-}
 func showresults_dbg(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("showresults_dbg")
 	filename := r.URL.Query().Get("filename")
@@ -139,7 +95,7 @@ func showresults_dbg(w http.ResponseWriter, r *http.Request) {
 	if filename == "" {
 		csvpath = ""
 	}
-	renderbycsvfile(w, r, csvpath, 1)
+	util.Renderbycsvfile(w, r, csvpath, 1)
 }
 
 func showresults_ids(w http.ResponseWriter, r *http.Request) {
@@ -152,89 +108,7 @@ func showresults_ids(w http.ResponseWriter, r *http.Request) {
 	if filename == "" {
 		csvpath = ""
 	}
-	renderbycsvfile(w, r, csvpath, 2)
-}
-func sorted_dbg(data [][]string) {
-	sort.Slice(data, func(i, j int) bool {
-		num1, _ := strconv.Atoi(data[i][1])
-		num2, _ := strconv.Atoi(data[j][1])
-		return num1 > num2
-	})
-	return
-}
-func renderbycsvfile(w http.ResponseWriter, r *http.Request, csvpath string, htmlheadertype int) {
-	var t *template.Template
-	var headername string
-	var err error
-	if htmlheadertype == 1 {
-		headername = "DBG Event Count List"
-		t, err = template.ParseFiles("./templates/dataanalyzer/show_dbg.html")
-	} else if htmlheadertype == 2 {
-		headername = "IDS Capture Infomation"
-		t, err = template.ParseFiles("./templates/dataanalyzer/show_ids.html")
-	}
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	if csvpath == "" {
-		t.Execute(w, struct {
-			Header       []string
-			Data         [][]string
-			Downloadlink string
-			Htmlheader   string
-		}{Data: [][]string{},
-			Header:       []string{},
-			Downloadlink: "",
-			Htmlheader:   headername,
-		})
-		return
-	}
-	csvfile, err := os.Open(csvpath)
-	if err != nil {
-		t.Execute(w, struct {
-			Header       []string
-			Data         [][]string
-			Downloadlink string
-			Htmlheader   string
-		}{Data: [][]string{},
-			Header:       []string{},
-			Downloadlink: "../" + strings.ReplaceAll(csvpath, "\\", "/"),
-			Htmlheader:   headername,
-		})
-		return
-	}
-	defer csvfile.Close()
-
-	csvreader := csv.NewReader(csvfile)
-	csvdata, err := csvreader.ReadAll()
-	if err != nil {
-		fmt.Fprintln(w, "Read failed:", err)
-	}
-
-	t.Execute(w, struct {
-		Header       []string
-		Data         [][]string
-		Downloadlink string
-		Htmlheader   string
-	}{Data: func() [][]string {
-		if len(csvdata) > 1 {
-			if htmlheadertype == 1 {
-				sorted_dbg(csvdata[1:])
-			}
-			return csvdata[1:]
-		}
-		return [][]string{}
-	}(),
-		Header: func() []string {
-			if len(csvdata) > 0 {
-				return csvdata[0]
-			}
-			return []string{}
-		}(),
-		Downloadlink: "../" + strings.ReplaceAll(csvpath, "\\", "/"),
-		Htmlheader:   headername,
-	})
+	util.Renderbycsvfile(w, r, csvpath, 2)
 }
 
 func uploadedfiles(w http.ResponseWriter, r *http.Request) {
@@ -276,17 +150,17 @@ func sockethandler_withfilter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filter := string(p)
-	socketManagerAdd(filter, conn)
-	defer socketManagerDelete(conn)
+	util.SocketManagerAdd(filter, conn)
+	defer util.SocketManagerDelete(conn)
 	//建立连接后首先先把当前信息都导一下
-	filteredfilestatuslist := []*FileStatus{}
-	lock.RLock()
-	for k, v := range FileStatusMap {
+	filteredfilestatuslist := []*util.FileStatus{}
+	util.FileStatusMapLock.RLock()
+	for k, v := range util.FileStatusMap {
 		if strings.Contains(k, filter) {
 			filteredfilestatuslist = append(filteredfilestatuslist, v)
 		}
 	}
-	lock.RUnlock()
+	util.FileStatusMapLock.RUnlock()
 	conn.WriteJSON(filteredfilestatuslist)
 	//关闭网页后这段就会退出
 	for {
@@ -296,32 +170,6 @@ func sockethandler_withfilter(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-}
-func socketManagerAdd(filter string, conn *websocket.Conn) {
-	lock2.Lock()
-	socketStatusManager[conn] = filter
-	lock2.Unlock()
-}
-func socketManagerDelete(conn *websocket.Conn) {
-	lock2.Lock()
-	delete(socketStatusManager, conn)
-	lock2.Unlock()
-}
-
-func announceAllSocketsWithFilter() {
-	lock2.RLock()
-	for conn, filter := range socketStatusManager {
-		filteredfilestatuslist := []*FileStatus{}
-		lock.RLock()
-		for k, v := range FileStatusMap {
-			if strings.Contains(k, filter) {
-				filteredfilestatuslist = append(filteredfilestatuslist, v)
-			}
-		}
-		lock.RUnlock()
-		conn.WriteJSON(filteredfilestatuslist)
-	}
-	lock2.RUnlock()
 }
 
 func main() {
