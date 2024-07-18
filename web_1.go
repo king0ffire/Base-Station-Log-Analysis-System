@@ -1,22 +1,23 @@
 package main
 
 import (
+	"encoding/gob"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
-	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"webapp/util"
+	"webapp/util/file"
 	"webapp/util/session"
+	"webapp/util/socket"
 
 	"github.com/gorilla/websocket"
 )
 
 const uploadpath = "./cache"
-const localhosturl = "localhost:9090"
+const localpost = ":9090"
 
 func indexentry(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
@@ -39,41 +40,26 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
 		fmt.Println("收到上传的POST请求")
 		r.ParseMultipartForm(256 << 20) //32MB
-		file, handler, err := r.FormFile("uploadfile")
+		multipartfile, multiparthandler, err := r.FormFile("uploadfile")
 		if err != nil {
 			fmt.Println("upload fail:", err)
 			return
 		}
-		defer file.Close()
+		defer multipartfile.Close()
 
-		_, err = os.Stat("./cache/" + handler.Filename)
-		if err != nil {
-			cachefile, err := os.Create("./cache/" + handler.Filename)
-			if err != nil {
-				fmt.Println("open new fail:", err)
-				return
-			}
-			defer cachefile.Close()
-
-			_, err = cachefile.ReadFrom(file)
-			if err != nil {
-				fmt.Println("cache fail:", err)
-				return
-			}
-			util.ParseFile(handler.Filename, uploadpath)
-		} else {
-			fmt.Println("file already exists, skip parsing")
-			max, current, existence := util.CheckFileExist(handler.Filename)
-			if !existence {
-				fmt.Println("file created before web init")
-				util.FileStatusMapLock.Lock()
-				util.FileStatusMap[handler.Filename] = &util.FileStatus{Filename: handler.Filename, Max: max, Current: current}
-				util.FileStatusMapLock.Unlock()
-			}
+		uid, created := file.MultiPartFileSaver(uploadpath, &multipartfile, multiparthandler)
+		if !created {
+			fmt.Println("created failed:", created)
 		}
-		session.SessionAddFileHistory(w, r, handler.Filename)
+		existuid, ok := session.SessionAddFileHistory(w, r, uid, multiparthandler.Filename)
+		if !ok {
+			fmt.Println("file exist, use old:", existuid)
+		} else {
+			util.ParseFile(uid, uploadpath)
+		}
+		//同用户内不允许重名文件
+		http.Redirect(w, r, "/uploadedfiles?filename="+multiparthandler.Filename, http.StatusSeeOther)
 		fmt.Println("redirect success")
-		http.Redirect(w, r, "/uploadedfiles?filename="+handler.Filename, http.StatusSeeOther)
 	} else {
 		t, err := template.ParseFiles("./templates/upload/upload.html")
 		if err != nil {
@@ -89,13 +75,29 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func render404(w http.ResponseWriter, r *http.Request) {
+	t, err := template.ParseFiles("./templates/404.html")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	t.Execute(w, struct {
+		URL string
+	}{
+		URL: localhosturl,
+	})
+}
 func showresults_dbg(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("showresults_dbg")
 	filename := r.URL.Query().Get("filename")
-	filenamewithoutextension := filename
-	filenamewithoutextension = strings.TrimSuffix(filenamewithoutextension, path.Ext(filenamewithoutextension))
-	filenamewithoutextension = strings.TrimSuffix(filenamewithoutextension, path.Ext(filenamewithoutextension))
-	csvpath := filepath.Join(uploadpath, filenamewithoutextension, "dbg.csv")
+	nametoid := session.SessionGet(r).Values["nametoid"].(map[string]string)
+	uid, ok := nametoid[filename]
+	if !ok {
+		fmt.Println("access file u not have")
+		render404(w, r)
+		return
+	}
+	csvpath := filepath.Join(uploadpath, uid, "dbg.csv")
 	if filename == "" {
 		csvpath = ""
 	}
@@ -105,10 +107,14 @@ func showresults_dbg(w http.ResponseWriter, r *http.Request) {
 func showresults_ids(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("showresults_ids")
 	filename := r.URL.Query().Get("filename")
-	filenamewithoutextension := filename
-	filenamewithoutextension = strings.TrimSuffix(filenamewithoutextension, path.Ext(filenamewithoutextension))
-	filenamewithoutextension = strings.TrimSuffix(filenamewithoutextension, path.Ext(filenamewithoutextension))
-	csvpath := filepath.Join(uploadpath, filenamewithoutextension, "ids.csv")
+	nametoid := session.SessionGet(r).Values["nametoid"].(map[string]string)
+	uid, ok := nametoid[filename]
+	if !ok {
+		fmt.Println("access file u not have")
+		render404(w, r)
+		return
+	}
+	csvpath := filepath.Join(uploadpath, uid, "ids.csv")
 	if filename == "" {
 		csvpath = ""
 	}
@@ -154,35 +160,39 @@ func sockethandler_withfilter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filter := string(p)
-	util.SocketManagerAdd(filter, conn)
-	defer util.SocketManagerDelete(conn)
+	socket.SocketManagerAdd(filter, session.SessionGet(r), conn)
+	defer socket.SocketManagerDelete(conn)
 	//建立连接后首先先把当前信息都导一下
-	Filelist, err := session.SessionFileHistoryFilter(r)
+	filelist, err := session.SessionFileHistoryFilter(r) //从当前的cookie中提取文件列表
 	if err != nil {
 		fmt.Println("filtering retrieve fail:", err)
 		return
 	}
-	Filelist = util.FileListNameFilter(Filelist, filter)
-	util.FileStatusMapLock.RLock()
-	filteredfilestatus := util.StringListToMapValue(Filelist, util.FileStatusMap)
-	util.FileStatusMapLock.RUnlock()
-	/*
-		util.FileStatusMapLock.RLock()
-		filteredfilestatuslist := util.FileStatusMapNameFilter(util.FileStatusMap, filter)
-		util.FileStatusMapLock.RUnlock()
-	*/
-	conn.WriteJSON(filteredfilestatus)
-	//关闭网页后这段就会退出
+	for _, uid := range filelist {
+		if _, ok := file.FileStatusMapGet(uid); ok {
+			util.AnnounceAllSocketsWithFile(uid)
+		}
+	}
 	for {
-		_, _, err := conn.ReadMessage()
+		_, message, err := conn.ReadMessage()
 		if err != nil {
 			log.Println("websocket read error:", err)
 			break
 		}
+		if string(message) == "clearcache" {
+			util.Clearmycache(w, r, uploadpath)
+			conn.WriteJSON([]interface{}{})
+			fmt.Println("Empty Json returned")
+		}
 	}
 }
 
+func clearcache(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("clear cache")
+	util.Clearmycache(w, r, uploadpath)
+}
 func main() {
+	gob.Register(map[string]string{})
 	http.HandleFunc("/cache/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, ".csv") {
 			w.Header().Set("Content-Type", "text/csv")
@@ -197,9 +207,10 @@ func main() {
 	http.HandleFunc("/results/dbg", showresults_dbg)
 	http.HandleFunc("/results/ids", showresults_ids)
 	http.HandleFunc("/uploadedfiles", uploadedfiles)
+	http.HandleFunc("/clearcache", clearcache)
 	http.HandleFunc("/ws", sockethandler_withfilter)
 
-	err := http.ListenAndServe(localhosturl, nil)
+	err := http.ListenAndServe(localpost, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}

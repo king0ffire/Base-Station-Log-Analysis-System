@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/csv"
 	"fmt"
-	"html/template"
 	"net/http"
 	"os"
 	"os/exec"
@@ -12,21 +11,14 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
+	"text/template"
+	"webapp/util/file"
+	"webapp/util/pythonmanager"
+	"webapp/util/session"
+	"webapp/util/socket"
 
 	"github.com/gorilla/websocket"
 )
-
-type FileStatus struct {
-	Filename string
-	Max      int
-	Current  int
-}
-
-var FileStatusMap = make(map[string]*FileStatus) //for ids file
-var SocketStatusManager = make(map[*websocket.Conn]string)
-var FileStatusMapLock sync.RWMutex
-var SocketStatusManagerLock sync.RWMutex
 
 func FileListNameFilter(FileList []string, filter string) []string {
 	result := []string{}
@@ -37,76 +29,60 @@ func FileListNameFilter(FileList []string, filter string) []string {
 	}
 	return result
 }
-func FileStatusMapNameFilter(FileStatusMap map[string]*FileStatus, filter string) []*FileStatus {
-	filteredfilestatuslist := []*FileStatus{}
-	for k, v := range FileStatusMap {
-		if strings.Contains(k, filter) {
-			filteredfilestatuslist = append(filteredfilestatuslist, v)
-		}
-	}
-	return filteredfilestatuslist
-}
-func StringListToMapValue(StringList []string, TargetMap map[string]*FileStatus) []*FileStatus {
-	result := []*FileStatus{}
+func StringListToMapValue(StringList []string, TargetMap map[string]*file.FileStatus) []*file.FileStatus {
+	result := []*file.FileStatus{}
 	for _, v := range StringList {
 		result = append(result, TargetMap[v])
 	}
 	return result
 }
 
-func CheckFileExist(filename string) (int, int, bool) {
-	FileStatusMapLock.RLock()
-	value, err := FileStatusMap[filename]
-	FileStatusMapLock.RUnlock()
-	if err {
-		return value.Current, value.Max, err
-	}
-	return 0, 0, err
-}
-func ParseFile(Filename string, Uploadpath string) {
-	pythoncmd := exec.Command("python", "./scripts/main.py", filepath.Join(Uploadpath, Filename))
+func ParseFile(uid string, uploadpath string) {
+	pythoncmd := exec.Command("python", "./scripts/main.py", filepath.Join(uploadpath, uid+".tar.gz"), "1")
 	outpipe, _ := pythoncmd.StdoutPipe()
 	if err := pythoncmd.Start(); err != nil {
 		fmt.Println("start python fail:", err)
 		return
 	}
+	pythonmanager.PythonProcessStatusMapAdd(uid, pythoncmd)
 	scanner := bufio.NewScanner(outpipe)
-	FileStatusMapLock.Lock()
-	FileStatusMap[Filename] = &FileStatus{Filename: Filename, Max: 0, Current: 0}
-	FileStatusMapLock.Unlock()
+
 	go func() {
-		fmt.Println("Go thread start:", Filename)
+		fmt.Println("Go thread start:", uid)
+		defer fmt.Println("Go thread end:", uid)
+		defer DeleteFileAll(uploadpath, uid)
+		defer pythonmanager.PythonProcessStatusMapDelete(uid)
+
 		scanner.Scan()
-		fmt.Println("Received first line of exection:", Filename, ":", scanner.Text())
+		fmt.Println("Received first line of exection:", uid, ":", scanner.Text())
 		intText, err := strconv.Atoi(scanner.Text())
 		if err != nil {
 			fmt.Println("text conversion:", err)
 			return
 		}
-		FileStatusMapLock.Lock()
-		FileStatusMap[Filename].Max = intText
-		FileStatusMapLock.Unlock()
-		AnnounceAllSocketsWithFilter()
+		ok := file.FileStatusMapSet(uid, 0, intText)
+		if !ok {
+			Forcestop(uploadpath, uid)
+			return
+		}
+		AnnounceAllSocketsWithFile(uid)
 		for scanner.Scan() {
 			fmt.Println("python outputs:", scanner.Text())
 			if scanner.Text() == "sctp_finished_one" {
-				FileStatusMapLock.Lock()
-				FileStatusMap[Filename].Current++
-				FileStatusMapLock.Unlock()
-				AnnounceAllSocketsWithFilter()
+				value, existance := file.FileStatusMapGet(uid)
+				if !existance {
+					Forcestop(uploadpath, uid)
+					return
+				}
+				ok := file.FileStatusMapSet(uid, value.Current+1, value.Max)
+				if !ok {
+					Forcestop(uploadpath, uid)
+					return
+				}
+				AnnounceAllSocketsWithFile(uid)
 			}
 		}
-		fmt.Println("Go thread end:", Filename)
 	}()
-}
-
-func Sorted_dbg(data [][]string) {
-	sort.Slice(data, func(i, j int) bool {
-		num1, _ := strconv.Atoi(data[i][1])
-		num2, _ := strconv.Atoi(data[j][1])
-		return num1 > num2
-	})
-	return
 }
 
 func Renderbycsvfile(w http.ResponseWriter, r *http.Request, csvpath string, htmlheadertype int) {
@@ -183,30 +159,67 @@ func Renderbycsvfile(w http.ResponseWriter, r *http.Request, csvpath string, htm
 		Htmlheader:   headername,
 	})
 }
-
-func SocketManagerAdd(filter string, conn *websocket.Conn) {
-	SocketStatusManagerLock.Lock()
-	SocketStatusManager[conn] = filter
-	SocketStatusManagerLock.Unlock()
-}
-func SocketManagerDelete(conn *websocket.Conn) {
-	SocketStatusManagerLock.Lock()
-	delete(SocketStatusManager, conn)
-	SocketStatusManagerLock.Unlock()
+func Sorted_dbg(data [][]string) {
+	sort.Slice(data, func(i, j int) bool {
+		num1, _ := strconv.Atoi(data[i][1])
+		num2, _ := strconv.Atoi(data[j][1])
+		return num1 > num2
+	})
+	return
 }
 
-func AnnounceAllSocketsWithFilter() {
-	SocketStatusManagerLock.RLock()
-	for conn, filter := range SocketStatusManager {
-		filteredfilestatuslist := []*FileStatus{}
-		FileStatusMapLock.RLock()
-		for k, v := range FileStatusMap {
-			if strings.Contains(k, filter) {
-				filteredfilestatuslist = append(filteredfilestatuslist, v)
+func AnnounceAllSocketsWithFile(uid string) {
+	sockets, socketstatus := socket.SocketManagerGetsAll()
+	for i := range sockets {
+		filter := socketstatus[i].Filter
+		filesinsocket := AccessiableFileInSocket(sockets[i])
+		for _, f := range filesinsocket {
+			if f.Uid == uid {
+				filteredfilesinsocket := file.FileNameFilter(filesinsocket, filter)
+				sockets[i].WriteJSON(filteredfilesinsocket)
+				break
 			}
 		}
-		FileStatusMapLock.RUnlock()
-		conn.WriteJSON(filteredfilestatuslist)
 	}
-	SocketStatusManagerLock.RUnlock()
+}
+
+func AccessiableFileInSocket(conn *websocket.Conn) []*file.FileStatus {
+	socketstatus, ok := socket.SocketManagerGet(conn)
+	if !ok {
+		fmt.Println("socket not exist")
+		return []*file.FileStatus{}
+	}
+	connHoldingFileStatus := []*file.FileStatus{}
+	for _, uid := range socketstatus.Session.Values["filename"].([]string) {
+		fileStatus, ok := file.FileStatusMapGet(uid)
+		if !ok {
+			fmt.Println("non-existing file, failed")
+			return []*file.FileStatus{}
+		}
+		connHoldingFileStatus = append(connHoldingFileStatus, fileStatus)
+	}
+	return connHoldingFileStatus
+}
+
+func Clearmycache(w http.ResponseWriter, r *http.Request, uploadpath string) {
+	oldsession := session.SessionGet(r)
+	filelist := oldsession.Values["filename"].([]string)
+	for _, v := range filelist {
+		DeleteFileAll(uploadpath, v)
+		fmt.Println("cleared cache:", v)
+	}
+}
+
+func DeleteFileAll(uploadpath string, uid string) {
+
+	os.RemoveAll(filepath.Join(uploadpath, uid))
+	file.FileStatusMapDelete(uid)
+}
+
+func Forcestop(uploadpath string, uid string) {
+	fmt.Println("cache might be cleared, stop", uid)
+	cmdstatus, _ := pythonmanager.PythonProcessStatusMapGet(uid)
+	if err := cmdstatus.Cmd.Process.Kill(); err != nil {
+		fmt.Println("kill python process:", err)
+	}
 }

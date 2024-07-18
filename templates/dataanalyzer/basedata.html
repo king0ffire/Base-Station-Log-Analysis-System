@@ -9,7 +9,85 @@
     <link href="../../static/bootstrap-3.3.5/css/bootstrap-theme.min.css" rel="stylesheet" type="text/css"/>
     <!--jQuery-UI-->
     <link type="text/css" href="../../static/jquery-ui-bootstrap/css/custom-theme/jquery-ui-1.10.0.custom.css" rel="stylesheet" />
+    <script>
+      function geturlparameter(name){
+        name=name.replace(/[\[]/,'\\[').replace(/[\]]/,'\\]');
+        var regex =new RegExp("[\\?&]"+name+"=([^&#]*)");
+        var results=regex.exec(location.search);
+        return results===null?'':decodeURIComponent(results[1].replace(/\+/g,' '));
+      };
 
+      const host=window.location.host;
+      const myWebSocket = new WebSocket("ws://"+host+"/ws");
+      myWebSocket.onopen=function(e){
+        myWebSocket.send(document.getElementById("proto").value)
+         console.log("open:"+document.getElementById("proto").value)
+      }
+      myWebSocket.onmessage = function (e) {
+          updateinnerHTML(e)
+      };
+      var tbody = document.createElement('tbody')
+      function updateonetablerow(value)
+      {
+        var row=tbody.insertRow();
+        var cell1=row.insertCell(0);
+        var filename=value["Filename"];
+        var uid=value["Uid"]
+        cell1.innerHTML=filename;
+        cell1.setAttribute("class","text-center")
+        var current=value["Current"]
+        var max =value["Max"]
+        var cell2=row.insertCell(1);
+        if (max!=0){
+          cell2.innerHTML="已完成";
+        }else{
+          cell2.innerHTML="未完成";
+        }
+        cell2.setAttribute("class","text-center")
+        var cell3=row.insertCell(2);
+        if(max==0)
+        {
+          cell3.innerHTML="未完成";
+        }else if(current!=max){
+          cell3.innerHTML="已处理"+current/max*100+"%";
+        }else{
+          cell3.innerHTML="已完成";
+        }
+        cell3.setAttribute("class","text-center")
+        var cell4=row.insertCell(3);
+        var button1 = document.createElement("button");
+        var button2 = document.createElement("button");
+        button1.setAttribute("class","btn btn-success")
+        button2.setAttribute("class","btn btn-success")
+        button1.addEventListener("click",function(){
+          window.location.href="/results/dbg?filename="+filename
+        })
+        button2.addEventListener("click",function(){
+          window.location.href="/results/ids?filename="+filename
+        })
+        button1.innerHTML="查看dbglog文件统计";
+        button2.innerHTML="查看sctp文件统计";
+        cell4.appendChild(button1);
+        cell4.appendChild(document.createTextNode(" "));
+        cell4.appendChild(button2);
+        cell4.setAttribute("class","text-center")
+      };
+      function updateinnerHTML(e){
+          var jsondata=JSON.parse(e.data);
+          tbody=document.createElement('tbody')
+          const table = document.getElementById("table")
+          jsondata.forEach(updateonetablerow);
+          table.replaceChild(tbody, table.getElementsByTagName("tbody")[0]);
+      };
+      
+      function comfirmandget(){
+        var result=confirm("全部删除？");
+        if(result){
+          myWebSocket.send("clearcache");
+        }
+      }
+       
+    </script>
 </head>
 <body>
 <br>
@@ -25,8 +103,10 @@
     <input type="text" class="form-control" id="proto" name="filename" value="">&nbsp;&nbsp;
   </div>
   <button type="submit" class="btn btn-success">&nbsp;过&nbsp;&nbsp;&nbsp;滤&nbsp;</button>&nbsp;&nbsp;
-        <button type="submit" class="btn btn-info cancle">&nbsp;清&nbsp;&nbsp;&nbsp;除&nbsp;</button>
+  <button type="submit" class="btn btn-info cancle">&nbsp;清&nbsp;&nbsp;&nbsp;除&nbsp;</button>&nbsp;&nbsp;
+  
 </form>
+  <button class="btn btn-danger" onclick="comfirmandget()">&nbsp;删除所有缓存&nbsp;</button>&nbsp;&nbsp;
 </div>
 
 <br>
@@ -53,7 +133,9 @@
     </table>
 </div>
 
-
+<script>
+        document.getElementById("proto").value=geturlparameter("filename");
+</script>
 
 
 <script src="../../static/bootstrap-3.3.5/js/jquery-1.11.3.min.js" type="text/javascript"></script>
@@ -107,77 +189,6 @@
 });
 </script>
 
-<script>
-  function geturlparameter(name){
-    name=name.replace(/[\[]/,'\\[').replace(/[\]]/,'\\]');
-    var regex =new RegExp("[\\?&]"+name+"=([^&#]*)");
-    var results=regex.exec(location.search);
-    return results===null?'':decodeURIComponent(results[1].replace(/\+/g,' '));
-  };
-  document.getElementById("proto").value=geturlparameter("filename");
-  const host=window.location.host;
-  const myWebSocket = new WebSocket("ws://"+host+"/ws");
-  myWebSocket.onopen=function(e){
-    myWebSocket.send(document.getElementById("proto").value)
-     console.log("open:"+document.getElementById("proto").value)
-  }
-  myWebSocket.onmessage = function (e) {
-      updateinnerHTML(e)
-  };
-  var tbody = document.createElement('tbody')
-  function updateonetablerow(value)
-  {
-    var row=tbody.insertRow();
-    var cell1=row.insertCell(0);
-    var filename=value["Filename"];
-    cell1.innerHTML=filename;
-    cell1.setAttribute("class","text-center")
-    var current=value["Current"]
-    var max =value["Max"]
-    var cell2=row.insertCell(1);
-    if (max!=0){
-      cell2.innerHTML="已完成";
-    }else{
-      cell2.innerHTML="未完成";
-    }
-    cell2.setAttribute("class","text-center")
-    var cell3=row.insertCell(2);
-    if(max==0)
-    {
-      cell3.innerHTML="未完成";
-    }else if(current!=max){
-      cell3.innerHTML="已处理"+current/max*100+"%";
-    }else{
-      cell3.innerHTML="已完成";
-    }
-    cell3.setAttribute("class","text-center")
-    var cell4=row.insertCell(3);
-    var button1 = document.createElement("button");
-    var button2 = document.createElement("button");
-    button1.setAttribute("class","btn btn-success")
-    button2.setAttribute("class","btn btn-success")
-    button1.addEventListener("click",function(){
-      window.location.href="/results/dbg?filename="+filename
-    })
-    button2.addEventListener("click",function(){
-      window.location.href="/results/ids?filename="+filename
-    })
-    button1.innerHTML="查看dbglog文件统计";
-    button2.innerHTML="查看sctp文件统计";
-    cell4.appendChild(button1);
-    cell4.appendChild(document.createTextNode(" "));
-    cell4.appendChild(button2);
-    cell4.setAttribute("class","text-center")
-  };
-  function updateinnerHTML(e){
-      var jsondata=JSON.parse(e.data);
-      tbody=document.createElement('tbody')
-      const table = document.getElementById("table")
-      jsondata.forEach(updateonetablerow);
-      table.replaceChild(tbody, table.getElementsByTagName("tbody")[0]);
-  };
-  
-</script>
 
 </body>
 </html>

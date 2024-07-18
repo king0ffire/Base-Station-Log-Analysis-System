@@ -1,4 +1,6 @@
-from ids_pyshark import process_one_file_by2filters
+import asyncio
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from ids_pyshark import pcapInfoToListBy2Filters, process_one_file_by2filters
 from dbcount import counter_FileListby2patterns
 import os
 import tarfile
@@ -7,17 +9,19 @@ import glob
 import gzip
 import cProfile
 import sys
-
-def run(filelocation):
+import shutil
+#mode 0 is single thread， mode 1 is multithread
+def run(filelocation,mode=0):
     filter1='s1ap.MME_UE_S1AP_ID'
     filter2='s1ap.ENB_UE_S1AP_ID'
-    #filelocation=r"E:/temptest/Log_20240618_092153.tar.gz"
     basedir=os.path.dirname(filelocation)
     extracteddir=os.path.splitext(os.path.splitext(filelocation)[0])[0]
     if not os.path.exists(extracteddir):
         os.makedirs(extracteddir)
     with tarfile.open(filelocation,'r:gz') as tar:
         tar.extractall(path=extracteddir)
+    os.remove(filelocation)
+        
     tracelocation=os.path.join(extracteddir,'logs','trace.tgz')
     traceextraceteddir=os.path.splitext(tracelocation)[0]
     if not os.path.exists(traceextraceteddir):
@@ -56,13 +60,28 @@ def run(filelocation):
                     with open(os.path.join(cache_path,os.path.splitext(os.path.basename(filename))[0]),'wb') as f2:
                         f2.write(f.read())
                         sctp_file_list[i]=f2.name
-    for filename in sctp_file_list:
-        #csvwriter_id.writerow([os.path.basename(filename),'','','','','','',''])
-        process_one_file_by2filters(csvwriter_id,filename,filter1,filter2)
-        csvfile_id.flush()
-        print("sctp_finished_one")
-        sys.stdout.flush()
-    #print("sctp finished")
+    if mode==0:
+        for filename in sctp_file_list:
+            #csvwriter_id.writerow([os.path.basename(filename),'','','','','','',''])
+            process_one_file_by2filters(csvwriter_id,filename,filter1,filter2)
+            csvfile_id.flush()
+            print("sctp_finished_one")
+            sys.stdout.flush()
+        #print("sctp finished")
+    elif mode==1:
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            fs=[executor.submit(pcapInfoToListBy2Filters,filename,filter1,filter2,asyncio.new_event_loop()) for filename in sctp_file_list]
+            for future in as_completed(fs):
+                csvwriter_id.writerows(future.result())
+                csvfile_id.flush()
+                print("sctp_finished_one")
+                sys.stdout.flush()
+        print("multithread success")
+        
+    shutil.rmtree(os.path.join(extracteddir,"logs"))
+    shutil.rmtree(cache_path)
+
+
 
 if __name__ == '__main__':
-    run(sys.argv[1])
+    run(sys.argv[1],mode=int(sys.argv[2]))
