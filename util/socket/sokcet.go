@@ -1,53 +1,71 @@
+// SocketStatus map 可以接受任意类型的socket uid，目前直接使用conn的地址
 package socket
 
 import (
 	"sync"
 
 	"github.com/gorilla/sessions"
-	"github.com/gorilla/websocket"
 )
 
-type SocketStatus struct {
-	Filter  string
-	Session *sessions.Session
+type Socketidinterface interface {
+	WriteJSON(v interface{}) error
+	comparable
 }
 
-var socketStatusManager = make(map[*websocket.Conn]*SocketStatus)
-var socketStatusManagerLock sync.RWMutex
-
-func SocketManagerAdd(filter string, session *sessions.Session, conn *websocket.Conn) {
-	socketStatusManagerLock.Lock()
-	socketStatusManager[conn] = &SocketStatus{Filter: filter, Session: session}
-	socketStatusManagerLock.Unlock()
+type SocketStatus[socketidtype Socketidinterface] struct {
+	Filter   string
+	Cookie   *sessions.Session
+	Socketid socketidtype
+	Lock     sync.Mutex
 }
-func SocketManagerDelete(conn *websocket.Conn) {
-	socketStatusManagerLock.Lock()
-	delete(socketStatusManager, conn)
-	socketStatusManagerLock.Unlock()
+type SocketStatusManager[socketidtype Socketidinterface] struct {
+	SocketStatus map[socketidtype]*SocketStatus[socketidtype]
+	Lock         sync.RWMutex
 }
 
-func SocketManagerGetsAll() ([]*websocket.Conn, []*SocketStatus) {
-	socketlist := []*websocket.Conn{}
-	statuslist := []*SocketStatus{}
-
-	socketStatusManagerLock.RLock()
-	for k, v := range socketStatusManager {
-		statuslist = append(statuslist, v)
-		socketlist = append(socketlist, k)
-	}
-	socketStatusManagerLock.RUnlock()
-	return socketlist, statuslist
+// key could be *websocket.Conn
+func NewManager[socketidtype Socketidinterface]() *SocketStatusManager[socketidtype] {
+	return &SocketStatusManager[socketidtype]{SocketStatus: make(map[socketidtype]*SocketStatus[socketidtype])}
 }
 
-func SocketManagerGet(key *websocket.Conn) (*SocketStatus, bool) {
-	socketStatusManagerLock.RLock()
-	v, ok := socketStatusManager[key]
-	socketStatusManagerLock.RUnlock()
+func (m *SocketStatusManager[socketidtype]) Add(key socketidtype, filter string, cookie *sessions.Session) {
+	m.Lock.Lock()
+	m.SocketStatus[key] = &SocketStatus[socketidtype]{Filter: filter, Cookie: cookie, Socketid: key}
+	m.Lock.Unlock()
+}
+func (m *SocketStatusManager[socketidtype]) Delete(key socketidtype) {
+	m.Lock.Lock()
+	delete(m.SocketStatus, key)
+	m.Lock.Unlock()
+}
+
+func (m *SocketStatusManager[socketidtype]) Get(key socketidtype) (*SocketStatus[socketidtype], bool) {
+	m.Lock.RLock()
+	v, ok := m.SocketStatus[key]
+	m.Lock.RUnlock()
 	return v, ok
 }
 
-func SocketManagerSetSession(key *websocket.Conn, session *sessions.Session) {
-	socketStatusManagerLock.Lock()
-	socketStatusManager[key].Session = session
-	socketStatusManagerLock.Unlock()
+func (m *SocketStatusManager[socketidtype]) Set(key socketidtype, cookie *sessions.Session) bool {
+	s, ok := m.Get(key)
+	if ok {
+		m.Lock.Lock()
+		s.Cookie = cookie
+		m.Lock.Unlock()
+		return true
+	}
+	return false
+}
+
+func (m *SocketStatusManager[socketidtype]) KeyAndValue() ([]socketidtype, []*SocketStatus[socketidtype]) {
+	socketlist := []socketidtype{}
+	statuslist := []*SocketStatus[socketidtype]{}
+
+	m.Lock.RLock()
+	for k, v := range m.SocketStatus {
+		socketlist = append(socketlist, k)
+		statuslist = append(statuslist, v)
+	}
+	m.Lock.RUnlock()
+	return socketlist, statuslist
 }

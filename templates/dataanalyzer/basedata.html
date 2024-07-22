@@ -60,10 +60,10 @@
         button1.setAttribute("class","btn btn-success")
         button2.setAttribute("class","btn btn-success")
         button1.addEventListener("click",function(){
-          window.location.href="/results/dbg?filename="+filename
+          window.location.href="/results/dbg?fileid="+uid
         })
         button2.addEventListener("click",function(){
-          window.location.href="/results/ids?filename="+filename
+          window.location.href="/results/ids?fileid="+uid
         })
         button1.innerHTML="查看dbglog文件统计";
         button2.innerHTML="查看sctp文件统计";

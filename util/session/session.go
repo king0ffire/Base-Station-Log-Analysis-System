@@ -1,89 +1,64 @@
 package session
 
 import (
-	"encoding/base64"
-	"fmt"
-	"net/http"
+	"sync"
+	"webapp/util/file"
+	"webapp/util/socket"
 
 	"github.com/gorilla/sessions"
 )
 
-var key, _ = base64.RawStdEncoding.DecodeString("A+whGsPHGm88co6U+ozfFwR7oAsWaNK1VbfQxQxvTi0=")
-var store = sessions.NewCookieStore(key) //securecookie.GenerateRandomKey(32))
-
-func init() {
-	store.MaxAge(0) //浏览器关闭后就啥都没了
-}
-func SessionInit(w http.ResponseWriter, r *http.Request) {
-	//gob.Register(map[string]string{})
-	session, err := store.Get(r, "session_name")
-	fmt.Println(session.IsNew)
-	if err != nil {
-		fmt.Println("error init session:", err)
-		return
-	}
-	if session.Values["filename"] == nil {
-		session.Values["filename"] = []string{}
-		session.Values["nametoid"] = map[string]string{}
-		err = session.Save(r, w)
-		fmt.Println("cookie init")
-	} else {
-		fmt.Println("cookie exist")
-	}
-
-	if err != nil {
-		fmt.Println("error saving session:", err)
-		return
-	}
+type SessionStatus[sessionidtype comparable, fileidtype comparable, socketidtype socket.Socketidinterface] struct {
+	FileStatusManager   *file.FileStatusManager[fileidtype, sessionidtype]
+	SocketstatusManager *socket.SocketStatusManager[socketidtype]
 }
 
-// 会话的可访问文件全部保存在cookie里
-// false-> exist, return that uid
-func SessionAddFileHistory(w http.ResponseWriter, r *http.Request, uid string, filename string) (string, bool) {
-	session, err := store.Get(r, "session_name")
-	if err != nil {
-		fmt.Println("error add file:", err)
-		return "", true
-	}
-	if uid, ok := session.Values["nametoid"].(map[string]string)[filename]; ok {
-		return uid, false
-	}
-	session.Values["filename"] = append(session.Values["filename"].([]string), uid)
-	session.Values["nametoid"].(map[string]string)[filename] = uid
-	err = session.Save(r, w)
-	if err != nil {
-		fmt.Println("error saving session:", err)
-		return "", true
-	}
-	return "", true
-}
-func SessionDeleteAllFileHistory(w http.ResponseWriter, r *http.Request) {
-	session, err := store.Get(r, "session_name")
-	if err != nil {
-		fmt.Println("error delete file:", err)
-		return
-	}
-	session.Values["filename"] = []string{}
-	session.Values["nametoid"] = map[string]string{}
-	err = session.Save(r, w)
-	if err != nil {
-		fmt.Println("error saving session:", err)
-	}
+type SessionStatusManager[sessionidtype comparable, fileidtype comparable, socketidtype socket.Socketidinterface] struct {
+	SessionStatus map[sessionidtype]*SessionStatus[sessionidtype, fileidtype, socketidtype]
+	Lock          sync.RWMutex
 }
 
-func SessionFileHistoryFilter(r *http.Request) ([]string, error) {
-	session, err := store.Get(r, "session_name")
-	if err != nil {
-		return nil, err
-	}
-	return session.Values["filename"].([]string), err
+func NewManager[sessionidtype comparable, fileidtype comparable, socketidtype socket.Socketidinterface]() *SessionStatusManager[sessionidtype, fileidtype, socketidtype] {
+	return &SessionStatusManager[sessionidtype, fileidtype, socketidtype]{SessionStatus: make(map[sessionidtype]*SessionStatus[sessionidtype, fileidtype, socketidtype])}
 }
 
-func SessionGet(r *http.Request) *sessions.Session {
-	session, err := store.Get(r, "session_name")
-	if err != nil {
-		fmt.Println("error getting session:", err)
-		return nil
-	}
-	return session
+func (m *SessionStatusManager[sessionidtype, fileidtype, socketidtype]) Add(key sessionidtype) {
+	m.Lock.Lock()
+	m.SessionStatus[key] = &SessionStatus[sessionidtype, fileidtype, socketidtype]{FileStatusManager: file.NewManager[fileidtype, sessionidtype](), SocketstatusManager: socket.NewManager[socketidtype]()}
+	m.Lock.Unlock()
+}
+func (m *SessionStatusManager[sessionidtype, fileidtype, socketidtype]) Delete(key sessionidtype) {
+	m.Lock.Lock()
+	delete(m.SessionStatus, key)
+	m.Lock.Unlock()
+}
+
+func (m *SessionStatusManager[sessionidtype, fileidtype, socketidtype]) AddFile(key sessionidtype, fileuid fileidtype, filename string, current int, max int, userid sessionidtype) {
+	m.Lock.RLock()
+	m.SessionStatus[key].FileStatusManager.Add(fileuid, filename, current, max, userid)
+	m.Lock.RUnlock()
+}
+
+func (m *SessionStatusManager[sessionidtype, fileidtype, socketidtype]) AddSocket(key sessionidtype, socketid socketidtype, fileter string, cookie *sessions.Session) {
+	m.Lock.RLock()
+	m.SessionStatus[key].SocketstatusManager.Add(socketid, fileter, cookie)
+	m.Lock.RUnlock()
+}
+
+func (m *SessionStatusManager[sessionidtype, fileidtype, socketidtype]) Get(key sessionidtype) (*SessionStatus[sessionidtype, fileidtype, socketidtype], bool) {
+	m.Lock.RLock()
+	v, ok := m.SessionStatus[key]
+	m.Lock.RUnlock()
+	return v, ok
+}
+func (m *SessionStatusManager[sessionidtype, fileidtype, socketidtype]) FileKeyAndValue(key sessionidtype) ([]fileidtype, []*file.FileStatus[fileidtype, sessionidtype]) {
+	m.Lock.RLock()
+	defer m.Lock.RUnlock()
+	return m.SessionStatus[key].FileStatusManager.KeyAndValue()
+}
+
+func (m *SessionStatusManager[sessionidtype, fileidtype, socketidtype]) SocketKeyAndValue(key sessionidtype) ([]socketidtype, []*socket.SocketStatus[socketidtype]) {
+	m.Lock.RLock()
+	defer m.Lock.RUnlock()
+	return m.SessionStatus[key].SocketstatusManager.KeyAndValue()
 }

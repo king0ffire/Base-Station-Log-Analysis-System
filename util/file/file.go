@@ -1,72 +1,71 @@
+// File uid
 package file
 
 import (
-	"fmt"
-	"mime/multipart"
-	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
-type FileStatus struct {
+type FileCacheQueue[fileidtype comparable, useruidtype comparable] struct {
+	Queue []*FileStatus[fileidtype, useruidtype]
+	Lock  sync.RWMutex
+}
+
+func (m *FileCacheQueue[fileidtype, useruidtype]) Push(file *FileStatus[fileidtype, useruidtype]) {
+	m.Lock.Lock()
+	defer m.Lock.Unlock()
+	m.Queue = append(m.Queue, file)
+}
+
+func (m *FileCacheQueue[fileidtype, useruidtype]) Pop() {
+	m.Lock.Lock()
+	defer m.Lock.Unlock()
+	if len(m.Queue) > 0 {
+		m.Queue = m.Queue[1:]
+	}
+}
+
+func (m *FileCacheQueue[fileidtype, useruidtype]) Len() int {
+	m.Lock.RLock()
+	defer m.Lock.RUnlock()
+	return len(m.Queue)
+}
+
+func (m *FileCacheQueue[fileidtype, useruidtype]) Top() *FileStatus[fileidtype, useruidtype] {
+	m.Lock.RLock()
+	defer m.Lock.RUnlock()
+	if len(m.Queue) > 0 {
+		return m.Queue[0]
+	}
+	return nil
+}
+
+func (m *FileCacheQueue[fileidtype, useruidtype]) Delete(uid fileidtype) {
+	m.Lock.Lock()
+	defer m.Lock.Unlock()
+	for i, v := range m.Queue {
+		if v.Uid == uid {
+			m.Queue = append(m.Queue[:i], m.Queue[i+1:]...)
+			return
+		}
+	}
+}
+
+type FileStatus[fileidtype comparable, useruidtype comparable] struct {
 	Filename string
-	Uid      string //newlocation
+	Uid      fileidtype //newlocation
 	Max      int
 	Current  int
+	Useruid  useruidtype
 }
 
-var fileStatusMap = make(map[string]*FileStatus) //uid to file
-var fileStatusMapLock sync.RWMutex
-
-func MultiPartFileSaver(savepath string, file *multipart.File, handler *multipart.FileHeader) (string, bool) {
-	uid := strconv.FormatInt(time.Now().UnixNano(), 10)
-	_, err := os.Stat(filepath.Join(savepath, uid+".tar.gz"))
-	fmt.Println("newfile path:", filepath.Join(savepath, uid+".tar.gz"))
-	if err != nil {
-		cachefile, err := os.Create(filepath.Join(savepath, uid+".tar.gz"))
-		if err != nil {
-			fmt.Println("create new fail:", err)
-			return "", false
-		}
-		defer cachefile.Close()
-
-		_, err = cachefile.ReadFrom(*file)
-		if err != nil {
-			fmt.Println("cache fail:", err)
-			return "", false
-		}
-
-		FileStatusMapAdd(uid, handler.Filename, 0, 0)
-		return uid, true
-	} else {
-		fmt.Println("file already exists, fatal error, skip parsing")
-		return "", false
-		/*
-			max, current, existence := util.CheckFileExist(handler.Filename)
-			if !existence {
-				fmt.Println("file created before web init")
-				util.FileStatusMapLock.Lock()
-				util.FileStatusMap[handler.Filename] = &util.FileStatus{Filename: handler.Filename, Max: max, Current: current}
-				util.FileStatusMapLock.Unlock()
-			}*/
-	}
-
-}
-func FileStatusMapNameFilter(filter string) []*FileStatus {
-	filteredfilestatuslist := []*FileStatus{}
-	for _, v := range fileStatusMap {
-		if strings.Contains(v.Filename, filter) {
-			filteredfilestatuslist = append(filteredfilestatuslist, v)
-		}
-	}
-	return filteredfilestatuslist
+type FileStatusManager[Keytype comparable, useruidtype comparable] struct {
+	Filestatus map[Keytype]*FileStatus[Keytype, useruidtype]
+	Lock       sync.RWMutex
 }
 
-func FileNameFilter(files []*FileStatus, filter string) []*FileStatus {
-	result := []*FileStatus{}
+func FileNameFilter[fileidtype comparable, useruidtype comparable](files []*FileStatus[fileidtype, useruidtype], filter string) []*FileStatus[fileidtype, useruidtype] {
+	result := []*FileStatus[fileidtype, useruidtype]{}
 	for _, file := range files {
 		if strings.Contains(file.Filename, filter) {
 			result = append(result, file)
@@ -74,35 +73,60 @@ func FileNameFilter(files []*FileStatus, filter string) []*FileStatus {
 	}
 	return result
 }
+func NewManager[Keytype comparable, useruidtype comparable]() *FileStatusManager[Keytype, useruidtype] {
+	return &FileStatusManager[Keytype, useruidtype]{Filestatus: make(map[Keytype]*FileStatus[Keytype, useruidtype])}
+}
 
-func FileStatusMapSet(uid string, current int, max int) bool {
-	oldvalue, ok := FileStatusMapGet(uid)
+func (m *FileStatusManager[Keytype, useruidtype]) Add(uid Keytype, filename string, current int, max int, userid useruidtype) {
+	m.Lock.Lock()
+	m.Filestatus[uid] = &FileStatus[Keytype, useruidtype]{Filename: filename, Uid: uid, Current: current, Max: max, Useruid: userid}
+	m.Lock.Unlock()
+}
+
+func (m *FileStatusManager[Keytype, useruidtype]) Delete(uid Keytype) {
+	m.Lock.Lock()
+	delete(m.Filestatus, uid)
+	m.Lock.Unlock()
+}
+
+func (m *FileStatusManager[Keytype, useruidtype]) Get(uid Keytype) (*FileStatus[Keytype, useruidtype], bool) {
+	m.Lock.RLock()
+	v, ok := m.Filestatus[uid]
+	m.Lock.RUnlock()
+	return v, ok
+}
+
+func (m *FileStatusManager[Keytype, useruidtype]) Set(uid Keytype, current int, max int, useruid useruidtype) bool {
+	oldvalue, ok := m.Get(uid)
 	if ok {
-		fileStatusMapLock.Lock()
+		m.Lock.Lock()
 		oldvalue.Current = current
 		oldvalue.Max = max
-		fileStatusMapLock.Unlock()
+		oldvalue.Useruid = useruid
+		m.Lock.Unlock()
 		return true
 	}
 	return false
 }
 
-func FileStatusMapGet(uid string) (*FileStatus, bool) {
-	fileStatusMapLock.RLock()
-	v, ok := fileStatusMap[uid]
-	fileStatusMapLock.RUnlock()
-	return v, ok
+func (m *FileStatusManager[Keytype, useruidtype]) KeyAndValue() ([]Keytype, []*FileStatus[Keytype, useruidtype]) {
+	keys := []Keytype{}
+	values := []*FileStatus[Keytype, useruidtype]{}
+	m.Lock.RLock()
+	for k, v := range m.Filestatus {
+		keys = append(keys, k)
+		values = append(values, v)
+	}
+	m.Lock.RUnlock()
+	return keys, values
 }
 
-func FileStatusMapDelete(uid string) {
-	fileStatusMapLock.Lock()
-	delete(fileStatusMap, uid)
-	fileStatusMapLock.Unlock()
-}
-
-func FileStatusMapAdd(uid string, filename string, current int, max int) {
-	value := &FileStatus{Filename: filename, Uid: uid, Current: current, Max: max}
-	fileStatusMapLock.Lock()
-	fileStatusMap[uid] = value
-	fileStatusMapLock.Unlock()
+func (m *FileStatusManager[Keytype, useruidtype]) FilterGetByFilename(filter string) []*FileStatus[Keytype, useruidtype] {
+	filteredfilestatuslist := []*FileStatus[Keytype, useruidtype]{}
+	for _, v := range m.Filestatus {
+		if strings.Contains(v.Filename, filter) {
+			filteredfilestatuslist = append(filteredfilestatuslist, v)
+		}
+	}
+	return filteredfilestatuslist
 }

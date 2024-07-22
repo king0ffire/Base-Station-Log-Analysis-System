@@ -9,7 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"webapp/util"
+	"webapp/util/cookie"
 	"webapp/util/file"
+	"webapp/util/pythonmanager"
 	"webapp/util/session"
 	"webapp/util/socket"
 
@@ -17,12 +19,24 @@ import (
 )
 
 const uploadpath = "./cache"
-const localpost = ":9090"
+const localport = ":9090"
+
+var sessionmanager = session.NewManager[string, string, *websocket.Conn]()
+var cachequeue = &file.FileCacheQueue[string, string]{}
+var pythonprocessesmanager = pythonmanager.NewManager[string]()
 
 func indexentry(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
-		session.SessionInit(w, r)
-
+		isnew := cookie.CookieInit(w, r) //这个浏览器的唯一身份在此定义
+		userid, ok := cookie.CookieGet(r).Values["id"].(string)
+		if !ok {
+			fmt.Println("userid not found")
+			return
+		}
+		if isnew {
+			sessionmanager.Add(userid)
+			fmt.Println("Add User:", userid)
+		}
 		t, err := template.ParseFiles("./templates/home/index.html")
 		if err != nil {
 			fmt.Println(err)
@@ -31,7 +45,7 @@ func indexentry(w http.ResponseWriter, r *http.Request) {
 		t.Execute(w, struct {
 			URL string
 		}{
-			URL: localhosturl,
+			URL: localport,
 		})
 	}
 }
@@ -46,18 +60,28 @@ func upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer multipartfile.Close()
-
-		uid, created := file.MultiPartFileSaver(uploadpath, &multipartfile, multiparthandler)
+		userid, ok := cookie.CookieGet(r).Values["id"].(string)
+		if !ok {
+			fmt.Println("userid not found")
+			return
+		}
+		fileuid, created := util.MultiPartFileSaver(uploadpath, &multipartfile, multiparthandler)
 		if !created {
 			fmt.Println("created failed:", created)
+			return
 		}
-		existuid, ok := session.SessionAddFileHistory(w, r, uid, multiparthandler.Filename)
-		if !ok {
-			fmt.Println("file exist, use old:", existuid)
-		} else {
-			util.ParseFile(uid, uploadpath)
-		}
-		//同用户内不允许重名文件
+		util.OldFileCollection(sessionmanager, pythonprocessesmanager, cachequeue, fileuid, uploadpath, userid)
+		util.AddFileToMemory(sessionmanager, pythonprocessesmanager, cachequeue, fileuid, multiparthandler.Filename, 0, 0, userid)
+		/*
+			existuid, ok := session.SessionAddFileHistory(w, r, uid, multiparthandler.Filename)
+			if !ok {
+				fmt.Println("file exist, use old:", existuid)
+			} else {
+				util.ParseFile(uid, uploadpath)
+			}*/
+		//同用户内允许重名文件
+		util.ParseFile(sessionmanager, pythonprocessesmanager, cachequeue, fileuid, uploadpath, userid)
+
 		http.Redirect(w, r, "/uploadedfiles?filename="+multiparthandler.Filename, http.StatusSeeOther)
 		fmt.Println("redirect success")
 	} else {
@@ -69,56 +93,10 @@ func upload(w http.ResponseWriter, r *http.Request) {
 		t.Execute(w, struct {
 			URL string
 		}{
-			URL: localhosturl,
+			URL: localport,
 		})
 
 	}
-}
-
-func render404(w http.ResponseWriter, r *http.Request) {
-	t, err := template.ParseFiles("./templates/404.html")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	t.Execute(w, struct {
-		URL string
-	}{
-		URL: localhosturl,
-	})
-}
-func showresults_dbg(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("showresults_dbg")
-	filename := r.URL.Query().Get("filename")
-	nametoid := session.SessionGet(r).Values["nametoid"].(map[string]string)
-	uid, ok := nametoid[filename]
-	if !ok {
-		fmt.Println("access file u not have")
-		render404(w, r)
-		return
-	}
-	csvpath := filepath.Join(uploadpath, uid, "dbg.csv")
-	if filename == "" {
-		csvpath = ""
-	}
-	util.Renderbycsvfile(w, r, csvpath, 1)
-}
-
-func showresults_ids(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("showresults_ids")
-	filename := r.URL.Query().Get("filename")
-	nametoid := session.SessionGet(r).Values["nametoid"].(map[string]string)
-	uid, ok := nametoid[filename]
-	if !ok {
-		fmt.Println("access file u not have")
-		render404(w, r)
-		return
-	}
-	csvpath := filepath.Join(uploadpath, uid, "ids.csv")
-	if filename == "" {
-		csvpath = ""
-	}
-	util.Renderbycsvfile(w, r, csvpath, 2)
 }
 
 func uploadedfiles(w http.ResponseWriter, r *http.Request) {
@@ -133,7 +111,7 @@ func uploadedfiles(w http.ResponseWriter, r *http.Request) {
 		URL      string
 		Filename string
 	}{
-		URL:      localhosturl,
+		URL:      localport,
 		Filename: r.URL.Query().Get("filename"),
 	})
 }
@@ -160,19 +138,28 @@ func sockethandler_withfilter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filter := string(p)
-	socket.SocketManagerAdd(filter, session.SessionGet(r), conn)
-	defer socket.SocketManagerDelete(conn)
-	//建立连接后首先先把当前信息都导一下
-	filelist, err := session.SessionFileHistoryFilter(r) //从当前的cookie中提取文件列表
-	if err != nil {
-		fmt.Println("filtering retrieve fail:", err)
+	userid, ok := cookie.CookieGet(r).Values["id"].(string)
+	if !ok {
+		fmt.Println("userid not found")
 		return
 	}
-	for _, uid := range filelist {
-		if _, ok := file.FileStatusMapGet(uid); ok {
-			util.AnnounceAllSocketsWithFile(uid)
-		}
+	usersession, ok := sessionmanager.Get(userid)
+	if !ok {
+		fmt.Println("usersession not found")
+		return
 	}
+	fmt.Println("current user id: ", userid)
+	usersession.SocketstatusManager.Add(conn, filter, cookie.CookieGet(r))
+	defer usersession.SocketstatusManager.Delete(conn)
+	currentsocket, ok := usersession.SocketstatusManager.Get(conn)
+	if !ok {
+		fmt.Println("socket not found")
+		return
+	}
+	_, filelist := usersession.FileStatusManager.KeyAndValue()
+	socketlist := []*socket.SocketStatus[*websocket.Conn]{currentsocket}
+	fmt.Println("filelist length", len(filelist))
+	util.AnnounceAllSocketsInUser(filelist, socketlist)
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
@@ -180,8 +167,10 @@ func sockethandler_withfilter(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if string(message) == "clearcache" {
-			util.Clearmycache(w, r, uploadpath)
+			clearcache(w, r)
+			currentsocket.Lock.Lock()
 			conn.WriteJSON([]interface{}{})
+			currentsocket.Lock.Unlock()
 			fmt.Println("Empty Json returned")
 		}
 	}
@@ -189,8 +178,88 @@ func sockethandler_withfilter(w http.ResponseWriter, r *http.Request) {
 
 func clearcache(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("clear cache")
-	util.Clearmycache(w, r, uploadpath)
+	userid, ok := cookie.CookieGet(r).Values["id"].(string)
+	if !ok {
+		fmt.Println("userid not found")
+		return
+	}
+	usersession, ok := sessionmanager.Get(userid)
+	if !ok {
+		fmt.Println("usersession not found")
+		return
+	}
+	_, userholdingfiles := usersession.FileStatusManager.KeyAndValue()
+	for _, v := range userholdingfiles {
+		pythonprocessesmanager.Delete(v.Uid)
+		cachequeue.Delete(v.Uid)
+		usersession.FileStatusManager.Delete(v.Uid)
+		util.DeleteFileFromLocal(uploadpath, v.Uid)
+		fmt.Println("cleared cache:", v.Uid)
+	}
 }
+
+func render404(w http.ResponseWriter, r *http.Request) {
+	t, err := template.ParseFiles("./templates/404.html")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	t.Execute(w, struct {
+		URL string
+	}{
+		URL: localport,
+	})
+}
+func showresults_dbg(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("showresults_dbg")
+	fileid := r.URL.Query().Get("fileid")
+	userid, ok := cookie.CookieGet(r).Values["id"].(string)
+	if !ok {
+		fmt.Println("userid not found")
+		return
+	}
+	usersession, ok := sessionmanager.Get(userid)
+	if !ok {
+		fmt.Println("usersession not found")
+		return
+	}
+	_, ok = usersession.FileStatusManager.Get(fileid)
+	if !ok {
+		fmt.Println("file status not found")
+		return
+	}
+	csvpath := filepath.Join(uploadpath, fileid, "dbg.csv")
+	if fileid == "" {
+		csvpath = ""
+	}
+	util.Renderbycsvfile(w, r, csvpath, 1)
+}
+
+func showresults_ids(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("showresults_ids")
+	fileid := r.URL.Query().Get("fileid")
+	userid, ok := cookie.CookieGet(r).Values["id"].(string)
+	if !ok {
+		fmt.Println("userid not found")
+		return
+	}
+	usersession, ok := sessionmanager.Get(userid)
+	if !ok {
+		fmt.Println("usersession not found")
+		return
+	}
+	_, ok = usersession.FileStatusManager.Get(fileid)
+	if !ok {
+		fmt.Println("file status not found")
+		return
+	}
+	csvpath := filepath.Join(uploadpath, fileid, "ids.csv")
+	if fileid == "" {
+		csvpath = ""
+	}
+	util.Renderbycsvfile(w, r, csvpath, 2)
+}
+
 func main() {
 	gob.Register(map[string]string{})
 	http.HandleFunc("/cache/", func(w http.ResponseWriter, r *http.Request) {
@@ -210,7 +279,7 @@ func main() {
 	http.HandleFunc("/clearcache", clearcache)
 	http.HandleFunc("/ws", sockethandler_withfilter)
 
-	err := http.ListenAndServe(localpost, nil)
+	err := http.ListenAndServe(localport, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
