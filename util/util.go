@@ -46,7 +46,7 @@ func OldFileCollection[fileidtype comparable, useruidtype socket.Socketidinterfa
 	cachequeue *file.FileCacheQueue[fileidtype, fileidtype],
 	fileuid fileidtype, uploadpath string, userid fileidtype) {
 	if cachequeue.Len() > 99 {
-		fmt.Println("deleting old file")
+		fmt.Println("deleting expired file")
 		filetobedelete := cachequeue.Top()
 		pythonprocessesmanager.Delete(filetobedelete.Uid)
 		cachequeue.Pop()
@@ -162,17 +162,13 @@ func AnnounceAllSocketsInUser[sessionidtype comparable, fileidtype comparable, s
 		v.Lock.Unlock()
 	}
 }
-func Renderbycsvfile(w http.ResponseWriter, r *http.Request, csvpath string, htmlheadertype int) {
+func Renderbyidsfile(w http.ResponseWriter, r *http.Request, csvpath string) {
 	var t *template.Template
 	var headername string
 	var err error
-	if htmlheadertype == 1 {
-		headername = "DBG Event Count List"
-		t, err = template.ParseFiles("./templates/dataanalyzer/show_dbg.html")
-	} else if htmlheadertype == 2 {
-		headername = "IDS Capture Infomation"
-		t, err = template.ParseFiles("./templates/dataanalyzer/show_ids.html")
-	}
+	headername = "IDS Event Count List"
+	t, err = template.ParseFiles("./templates/dataanalyzer/show_ids.html")
+
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -219,9 +215,6 @@ func Renderbycsvfile(w http.ResponseWriter, r *http.Request, csvpath string, htm
 		Htmlheader   string
 	}{Data: func() [][]string {
 		if len(csvdata) > 1 {
-			if htmlheadertype == 1 {
-				Sorted_dbg(csvdata[1:])
-			}
 			return csvdata[1:]
 		}
 		return [][]string{}
@@ -236,13 +229,100 @@ func Renderbycsvfile(w http.ResponseWriter, r *http.Request, csvpath string, htm
 		Htmlheader:   headername,
 	})
 }
+
+type DBGTemplateDatastruct struct {
+	Header       []string
+	Data         [][]string
+	Downloadlink string
+	Htmlheader   string
+	Numbers      [][]int
+	Rates        []string
+}
+
+func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csvpath_acc string) {
+	var t *template.Template
+	var headername string
+	var err error
+	headername = "DBG Event Count List"
+	t, err = template.ParseFiles("./templates/dataanalyzer/show_dbg.html")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	Numbers := make([][]int, 4)
+	for i := range Numbers {
+		Numbers[i] = make([]int, 2)
+	}
+	Rates := make([]string, 4)
+	for i, _ := range Rates {
+		Rates[i] = "0"
+	}
+	DBGTemplateData := DBGTemplateDatastruct{
+		Data:         [][]string{},
+		Header:       []string{},
+		Downloadlink: "",
+		Htmlheader:   headername,
+		Numbers:      Numbers,
+		Rates:        Rates,
+	}
+	if csvpath == "" {
+		fmt.Println("no file selected")
+		t.Execute(w, DBGTemplateData)
+		return
+	}
+
+	csvfile, err := os.Open(csvpath)
+	DBGTemplateData.Downloadlink = "../" + strings.ReplaceAll(csvpath, "\\", "/")
+	if err != nil {
+		fmt.Println("csv open failed")
+		t.Execute(w, DBGTemplateData)
+		return
+	}
+	defer csvfile.Close()
+
+	accountingfile, err := os.Open(csvpath_acc)
+	if err != nil {
+		fmt.Println("acc open failed")
+		t.Execute(w, DBGTemplateData)
+		return
+	}
+	defer accountingfile.Close()
+
+	csvreader := csv.NewReader(csvfile)
+	csvdata, err := csvreader.ReadAll()
+	if err != nil {
+		fmt.Println(w, "Read failed:", err)
+	}
+	if len(csvdata) > 1 {
+		Sorted_dbg(csvdata[1:])
+		DBGTemplateData.Data = csvdata[1:]
+	}
+
+	if len(csvdata) > 0 {
+		DBGTemplateData.Header = csvdata[0]
+	}
+	accreader := csv.NewReader(accountingfile)
+	tempNumbers, err := accreader.ReadAll()
+	if err != nil {
+		fmt.Println("read failed", err)
+	}
+	for i, strrow := range tempNumbers {
+		for j, str := range strrow {
+			DBGTemplateData.Numbers[i][j], _ = strconv.Atoi(str)
+		}
+	}
+	for i, v := range Numbers {
+		DBGTemplateData.Rates[i] = fmt.Sprintf("%.4f", float64(v[0])/float64(v[1]))
+	}
+	t.Execute(w, DBGTemplateData)
+}
 func Sorted_dbg(data [][]string) {
 	sort.Slice(data, func(i, j int) bool {
 		num1, _ := strconv.Atoi(data[i][1])
 		num2, _ := strconv.Atoi(data[j][1])
 		return num1 > num2
 	})
-	return
 }
 
 /*

@@ -229,10 +229,11 @@ func showresults_dbg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	csvpath := filepath.Join(uploadpath, fileid, "dbg.csv")
+	csvpath_acc := filepath.Join(uploadpath, fileid, "accounting.csv")
 	if fileid == "" {
 		csvpath = ""
 	}
-	util.Renderbycsvfile(w, r, csvpath, 1)
+	util.Renderbydbgfile(w, r, csvpath, csvpath_acc)
 }
 
 func showresults_ids(w http.ResponseWriter, r *http.Request) {
@@ -257,7 +258,7 @@ func showresults_ids(w http.ResponseWriter, r *http.Request) {
 	if fileid == "" {
 		csvpath = ""
 	}
-	util.Renderbycsvfile(w, r, csvpath, 2)
+	util.Renderbyidsfile(w, r, csvpath)
 }
 
 func main() {

@@ -46,3 +46,22 @@ def counter_FileListby2patterns(path_list,pattern1,pattern2):
                 process_one_file_by2patterns(formatedNames,info,pattern1,pattern2)
     countermap=namesTocountermap(formatedNames)
     return countermap
+
+
+def ProcessFileByPattern(formatedNames,fileinfo,pattern):
+    extracted=patterninfilebyline(fileinfo,pattern)
+    return extracted
+
+def ParseFiles(path_list,pattern):
+    formatedNames=[]
+    for fileitem in path_list:
+        if(fileitem[-3:]=='.gz'):
+            with gzip.open(fileitem) as f:
+                info = f.read().decode("utf-8")
+                ProcessFileByPattern(formatedNames,info,pattern)
+        elif (fileitem[-4:]!='.csv'):
+            with open(fileitem) as f:
+                info=f.read()
+                ProcessFileByPattern(formatedNames,info,pattern)
+    countermap=namesTocountermap(formatedNames)
+    return countermap
