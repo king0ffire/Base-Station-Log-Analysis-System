@@ -19,13 +19,17 @@
             margin: 0;
             padding: 0;
         }
-        html, body {
+
+        html,
+        body {
             height: 100%;
         }
+
         body {
             display: flex;
             flex-direction: column;
         }
+
         .error-code {
             font-family: 'Creepster', cursive, arial, helvetica, sans-serif;
             font-size: 200px;
@@ -48,10 +52,11 @@
             padding-top: 70px;
         }
 
-        .bs-example{
-            flex:1;
-            display:flex;
+        .bs-example {
+            flex: 1;
+            display: flex;
         }
+
         .clear {
             float: none;
             clear: both;
@@ -62,38 +67,41 @@
             line-height: 30px;
         }
 
-        .dashboard-container{
-            margin: 0px 20px;
+        .dashboard-container {
+            margin: 20px 20px;
             padding: 20px 20px 8px;
             background-color: #FFFFFF;
             border-radius: 8px;
             float: left;
-
+            display: flex;
+            flex-direction: column;
         }
-        .layer03-right-chart{
+
+        .layer03-right-chart {
             position: relative;
             float: left;
-            width: 50%;
+            width: 25%;
             margin: 20px 0px;
         }
-        
-        .layer03-panel{
+
+        .layer03-panel {
             height: 100%;
             position: relative;
             float: left;
+            flex: 0;
         }
 
-        .layer03-right-chart-label{
+        .layer03-right-chart-label {
             color: "#000000";
             text-align: center;
             width: 100%;
         }
 
-        .container-title{
+        .container-title {
             color: "#000000";
             text-align: center;
             width: 100%;
-            border-bottom:1px solid rgba(5, 5, 5, 0.06);
+            border-bottom: 1px solid rgba(5, 5, 5, 0.06);
         }
 
         input[type=text] {
@@ -120,10 +128,10 @@
     <script src="../../static/echarts.js"></script>
     <script>
         $(function () {
-            drawLayer03Right($("#layer03_right_chart01 canvas").get(0),"#027825",{{index .Rates 0}});
-	        drawLayer03Right($("#layer03_right_chart02 canvas").get(0),"#006DD6",{{index .Rates 1}});
-	        drawLayer03Right($("#layer03_right_chart03 canvas").get(0),"#238681",{{index .Rates 2}});
-            drawLayer03Right($("#layer03_right_chart04 canvas").get(0),"#808000",{{index .Rates 3}});
+            drawLayer03Right($("#layer03_right_chart01 canvas").get(0), "#027825", {{ index .Rates 0}});
+        drawLayer03Right($("#layer03_right_chart02 canvas").get(0), "#006DD6", {{ index .Rates 1}});
+        drawLayer03Right($("#layer03_right_chart03 canvas").get(0), "#238681", {{ index .Rates 2}});
+        drawLayer03Right($("#layer03_right_chart04 canvas").get(0), "#808000", {{ index .Rates 3}});
         });
     </script>
 
@@ -149,58 +157,115 @@
     </div>
 
     <br>
-    
+
+
+    {{if eq .Downloadlink ""}}
+    <p id="instruction">请通过文件名搜索需要展示的结果</p>
+    {{else}}
+    {{if .Header}}
+    <a href="{{.Downloadlink}}" download>
+        <button id="textdbg" class="btn btn-success" type="button"
+            style="position: absolute; right: 50px;">下载csv文件</button>
+    </a>
+    <br>
     <div class="bs-example" data-example-id="hoverable-table">
-        {{if eq .Downloadlink ""}}
-            <p id="instruction">请通过文件名搜索需要展示的结果</p>
-        {{else}}
-            {{if .Header}}
-                <a href="{{.Downloadlink}}" download>
-                    <button id="textdbg" class="btn btn-success" type="button" style="position: absolute; right: 50px;">下载csv文件</button>
-                </a>
-            <br>
-        <div id="layer03_right" style="width:45%;" class="dashboard-container layer03-panel">
-            <div class="container-title" id="layer03-right-title">成功率统计面板</div>
-    
-            <div id="layer03_right_chart01" class="layer03-right-chart">
-                <div style="width: 130px;margin:auto">
-                    <div style="margin: auto;"><canvas width="130" height="150"></canvas>
+        <div style="display: flex; flex-direction: column;">
+            <div id="layer03_right" class="dashboard-container layer03-panel">
+                <div class="container-title" id="layer03-right-title">成功率统计面板</div>
+                <div class="dashboard-row">
+                    <div id="layer03_right_chart01" class="layer03-right-chart">
+
+                        <div style="text-align: center;"><canvas width="130" height="150"></canvas>
+                        </div>
+
+                        <div class="layer03-right-chart-label">RRC Setup Success:{{index .Numbers 0 0}}/{{index .Numbers
+                            0 1}}
+                        </div>
+                    </div>
+                    <div id="layer03_right_chart02" class="layer03-right-chart">
+
+                        <div style="text-align: center;"><canvas width="130" height="150"></canvas>
+                        </div>
+
+                        <div class="layer03-right-chart-label">RRC ConnReEstabSucc:{{index .Numbers 1 0}}/{{index
+                            .Numbers 1 1}}
+                        </div>
+                    </div>
+                    <div id="layer03_right_chart03" class="layer03-right-chart">
+                        <div style="text-align: center;"><canvas width="130" height="150"></canvas>
+                        </div>
+
+                        <div class="layer03-right-chart-label">Initial Establishment Success:{{index .Numbers 2
+                            0}}/{{index .Numbers 2 1}}</div>
+                    </div>
+
+                    <div id="layer03_right_chart04" class="layer03-right-chart">
+                        <div style="text-align: center;"><canvas width="130" height="150"></canvas>
+                        </div>
+
+                        <div class="layer03-right-chart-label">HO In Success:{{index .Numbers 3 0}}/{{index .Numbers 3
+                            1}}
+                        </div>
                     </div>
                 </div>
-                    <div class="layer03-right-chart-label">RRC Setup Success:{{index .Numbers 0 0}}/{{index .Numbers 0 1}}</div>
+
+
+
             </div>
-            <div id="layer03_right_chart02" class="layer03-right-chart" >
-                <div style="width: 130px;margin:auto">
-                    <div style="margin: auto;"><canvas width="130" height="150"></canvas>
+            <div id="layer03_right" class="dashboard-container layer03-panel" style="flex:1; display: flex;">
+                <!--饼状图-->
+                <div class="container-title" id="layer03-right-title">事件类型统计面板</div>
+                <div class="dashboard-row" , style="flex: 1;">
+
+                    <div class="layer03-right-chart" , style="width: 100%; height: 100%;">
+                        <div id="eventpie-01" style="width: 100%; height:70%; "></div>
+                        <div class="layer03-right-chart-label">时间分类相对比例</div>
                     </div>
+
+                    <!--
+                    <div class="layer03-right-chart" , style="flex:1;">
+                        <div id="eventpie-02" style="width: 100%;aspect-ratio: 1/1;"></div>
+                        <div class="layer03-right-chart-label">比例</div>
                     </div>
-                <div class="layer03-right-chart-label">RRC ConnReEstabSucc:{{index .Numbers 1 0}}/{{index .Numbers 1 1}}</div>
-            </div>
-            <div id="layer03_right_chart03" class="layer03-right-chart" >
-                <div style="width: 130px;margin:auto">
-                    <div style="margin: auto;"><canvas width="130" height="150"></canvas>
+
+                    <div class="layer03-right-chart" , style="flex:1;">
+                        <div id="eventpie-03" style="width: 100%;aspect-ratio: 1/1;"></div>
+                        <div class="layer03-right-chart-label">比例</div>
                     </div>
+
+                    <div class="layer03-right-chart" , style="flex:1;">
+                        <div id="eventpie-04" style="width: 100%;aspect-ratio: 1/1;"></div>
+                        <div class="layer03-right-chart-label">比例</div>
                     </div>
-                <div class="layer03-right-chart-label">Initial Establishment Success:{{index .Numbers 2 0}}/{{index .Numbers 2 1}}</div>
-            </div>
-            <div id="layer03_right_chart04" class="layer03-right-chart">
-                <div style="width: 130px;margin:auto">
-                    <div style="margin: auto;"><canvas width="130" height="150"></canvas>
-                    </div>
-                    </div>
-                <div class="layer03-right-chart-label">HO In Success:{{index .Numbers 3 0}}/{{index .Numbers 3 1}}</div>
+                    -->
+
+                </div>
             </div>
         </div>
 
         <div class="dashboard-container" style="width: 45%; height: 100%;display:flex;flex-direction: column;">
             <div class="container-title">事件总数统计</div>
-        <div id="eventbar" style="flex:1; width: 100%; float: left;">
+            <div id="eventbar" style="flex:1; width: 100%; float: left;">
+            </div>
         </div>
-        </div>                                                                                                                            
+        {{else}}
+        <div style="flex:auto">
+            <p class="error-code">
+                404
+            </p>
+            <p class="not-found">Not<br />Found</p>
+            <div class="clear"></div>
+            <div class="content">
+                您访问的页面不在地球上......
+            </div>
+        </div>
     </div>
-    </div>
-    
-    
+    {{end}}
+    {{end}}
+    <div id="UE接入" style="visibility: hidden ; position: absolute; width: 1000px; height: 500px;"></div>
+    <div id="S1切换入" style="visibility: hidden; position: absolute; width: 1000px; height: 500px;"></div>
+    <div id="S1切换出" style="visibility: hidden; position: absolute; width: 1000px; height: 500px;"></div>
+    <div id="未分类" style="visibility: hidden; position: absolute; width: 1000px; height: 500px;"></div>
 
     <script>
         function geturlparameter(name) {
@@ -241,26 +306,180 @@
                 }
             }
         ],
-        dataZoom: [
-        {
-            type: 'slider',
-            show: true,
-            yAxisIndex: [0],
-            start: 0,
-            end: 100
-        },
-        {
-            type: 'inside',
-            yAxisIndex: [0],
-            start: 0,
-            end: 100
-        }
-    ],
+            dataZoom: [
+                {
+                    type: 'slider',
+                    show: true,
+                    yAxisIndex: [0],
+                    start: 0,
+                    end: 100
+                },
+                {
+                    type: 'inside',
+                    yAxisIndex: [0],
+                    start: 0,
+                    end: 100
+                }
+            ],
 };
         option && myChart.setOption(option);
-        window.onresize=myChart.resize();
     </script>
 
+    <script>
+        var datasources = {
+            {{range $categoryname, $category := .Categories }}
+        "{{$categoryname}}": [
+            {{ range $key, $value:= $category.Eventinfo }}["{{$value.Eventname}}", {{ $value.Count }}], {{ end }}
+        ],
+            {{ end }}
+        }
+        /*
+        for (let key in datasources) {
+            var chartdom = document.getElementById(key);
+            console.log(chartdom.clientHeight)
+            var myChart = echarts.init(chartdom);
+            var option = {
+                dataset: {
+                    dimensions: ['Event Name', 'Count'],
+                    source: datasources[key]
+                },
+                grid: { containLabel: true },
+                xAxis: { name: 'amount' },
+                yAxis: { type: 'category', inverse: true },
+                series: [
+                    {
+                        type: 'bar',
+                        encode: {
+                            x: 'Count',
+                            y: 'Event Name'
+                        },
+                        label: {
+                            show: true,
+                            position: 'right'
+                        }
+                    }
+                ],
+                dataZoom: [
+                    {
+                        type: 'slider',
+                        show: true,
+                        yAxisIndex: [0],
+                        start: 0,
+                        end: 100
+                    },
+                    {
+                        type: 'inside',
+                        yAxisIndex: [0],
+                        start: 0,
+                        end: 100
+                    }
+                ],
+            }
+            option && myChart.setOption(option);
+        }*/
 
-</body>
+        var chartDom = document.getElementById('eventpie-01');
+        var myChart = echarts.init(chartDom);
+        var uniqueDom = {}
+        for (let key in datasources) {
+            uniqueDom[key] = document.createElement("div");
+            uniqueDom[key].myatt = false
+        }
+        var option;
+        option = {
+            tooltip: {
+                trigger: 'item',
+                position: 'right',
+                position: ['50%', '-250%'],
+                formatter: function (params) {
+                    /*
+                    var dom = document.getElementById("UE接入");
+                    var myChart=echarts.getInstanceByDom;
+                    dom.style.visibility="visible";
+                    console.log(dom);
+                    return dom.outerHTML;
+                    */
+                   if (uniqueDom[params.name].myatt == true) {
+                    return uniqueDom[params.name];
+                   }
+                    var dom = uniqueDom[params.name];
+                    dom.style.height = "500px";
+                    dom.style.width = "1000px";
+                    var chart = echarts.init(dom);
+                    var option = {
+                        dataset: {
+                            dimensions: ['Event Name', 'Count'],
+                            source: datasources[params.name]
+                        },
+                        grid: { containLabel: true },
+                        xAxis: { name: 'amount' },
+                        yAxis: { type: 'category', inverse: true },
+                        series: [
+                            {
+                                type: 'bar',
+                                encode: {
+                                    x: 'Count',
+                                    y: 'Event Name'
+                                },
+                                label: {
+                                    show: true,
+                                    position: 'right'
+                                }
+                            }
+                        ],
+                        dataZoom: [
+                            {
+                                type: 'slider',
+                                show: true,
+                                yAxisIndex: [0],
+                                start: 0,
+                                end: 100
+                            },
+                            {
+                                type: 'inside',
+                                yAxisIndex: [0],
+                                start: 0,
+                                end: 100
+                            }
+                        ],
+                    }
+                    option && chart.setOption(option);
+                    /*
+                    setTimeout(function () {
+                        chart.setOption(option);
+                        chart.resize();
+                        console.log("chart resize");
+                        console.log(option.dataset.source)
+                    }, 1000);
+                    */
+                    return chart.getDom();
+                },
+                enterable: true,
+            },
+            series: [
+                {
+                    type: 'pie',
+                    radius: '80%',
+                    data: [
+                        { value: {{ with (index .Categories "UE接入") }}{{.Count }}{{ end }} , name: 'UE接入' },
+                        { value: {{ with (index .Categories "S1切换入") }} {{.Count }} {{ end }}, name: "S1切换入" },
+                        { value: {{ with (index .Categories "S1切换出") }} {{.Count }} {{ end }}, name: "S1切换出" },
+                        { value: {{ with (index .Categories "未分类") }} {{.Count }} {{ end }}, name: "未分类" },
+      ],
+        emphasis: {
+            itemStyle: {
+                shadowBlur: 10,
+                    shadowOffsetX: 0,
+                        shadowColor: 'rgba(0, 0, 0, 0.5)'
+            }
+        },
+        label: { position: 'inside' },
+
+    }
+  ]
+};
+        option && myChart.setOption(option);
+
+    </script>
+
 </html>

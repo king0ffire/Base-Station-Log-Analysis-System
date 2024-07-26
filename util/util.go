@@ -3,7 +3,9 @@ package util
 import (
 	"bufio"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -14,6 +16,7 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"webapp/util/accounting"
 	"webapp/util/file"
 	"webapp/util/pythonmanager"
 	"webapp/util/session"
@@ -237,6 +240,7 @@ type DBGTemplateDatastruct struct {
 	Htmlheader   string
 	Numbers      [][]int
 	Rates        []string
+	Categories   map[string]*accounting.Categoryinfo
 }
 
 func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csvpath_acc string) {
@@ -258,6 +262,7 @@ func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csv
 	for i, _ := range Rates {
 		Rates[i] = "0"
 	}
+	Categories := make(map[string]*accounting.Categoryinfo)
 	DBGTemplateData := DBGTemplateDatastruct{
 		Data:         [][]string{},
 		Header:       []string{},
@@ -265,6 +270,7 @@ func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csv
 		Htmlheader:   headername,
 		Numbers:      Numbers,
 		Rates:        Rates,
+		Categories:   Categories,
 	}
 	if csvpath == "" {
 		fmt.Println("no file selected")
@@ -295,7 +301,7 @@ func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csv
 		fmt.Println(w, "Read failed:", err)
 	}
 	if len(csvdata) > 1 {
-		Sorted_dbg(csvdata[1:])
+		Sortdata(csvdata[1:])
 		DBGTemplateData.Data = csvdata[1:]
 	}
 
@@ -307,17 +313,49 @@ func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csv
 	if err != nil {
 		fmt.Println("read failed", err)
 	}
-	for i, strrow := range tempNumbers {
+	slog.Info("acc read", tempNumbers)
+	for i, strrow := range tempNumbers[:4] {
 		for j, str := range strrow {
 			DBGTemplateData.Numbers[i][j], _ = strconv.Atoi(str)
 		}
 	}
 	for i, v := range Numbers {
-		DBGTemplateData.Rates[i] = fmt.Sprintf("%.4f", float64(v[0])/float64(v[1]))
+		if v[1] != 0 {
+			DBGTemplateData.Rates[i] = fmt.Sprintf("%.4f", float64(v[0])/float64(v[1]))
+		} else {
+			DBGTemplateData.Rates[i] = "1"
+		}
 	}
+
+	Category := []string{"UE接入", "S1切换入", "S1切换出", "未分类"}
+	for _, v := range Category {
+		DBGTemplateData.Categories[v] = accounting.NewCategoryinfo(v)
+	}
+
+	tagsofevent := []string{}
+	for _, v := range DBGTemplateData.Data {
+		err := json.Unmarshal([]byte(strings.ReplaceAll(v[2], "'", "\"")), &tagsofevent)
+		if err != nil {
+			fmt.Println(v[2])
+			fmt.Println("json unmarshal failed", err)
+			return
+		}
+		for i, _ := range tagsofevent {
+			eventcount, err := strconv.Atoi(v[1])
+			if err != nil {
+				fmt.Println("strconv failed", err)
+			}
+			DBGTemplateData.Categories[tagsofevent[i]].AddEvent(v[0], eventcount)
+			DBGTemplateData.Categories[tagsofevent[i]].Count += eventcount
+		}
+	}
+	for _, v := range DBGTemplateData.Categories {
+		v.SortEvent()
+	}
+	slog.Info("The datagram:", "1", fmt.Sprintf("%#v", DBGTemplateData))
 	t.Execute(w, DBGTemplateData)
 }
-func Sorted_dbg(data [][]string) {
+func Sortdata(data [][]string) {
 	sort.Slice(data, func(i, j int) bool {
 		num1, _ := strconv.Atoi(data[i][1])
 		num2, _ := strconv.Atoi(data[j][1])

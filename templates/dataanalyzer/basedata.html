@@ -41,13 +41,13 @@
         if (max!=0){
           cell2.innerHTML="已完成";
         }else{
-          cell2.innerHTML="未完成";
+          cell2.innerHTML="处理中";
         }
         cell2.setAttribute("class","text-center")
         var cell3=row.insertCell(2);
         if(max==0)
         {
-          cell3.innerHTML="未完成";
+          cell3.innerHTML="未处理";
         }else if(current!=max){
           cell3.innerHTML="已处理"+current/max*100+"%";
         }else{
