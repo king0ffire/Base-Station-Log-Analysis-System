@@ -17,6 +17,7 @@ import (
 	"text/template"
 	"time"
 	"webapp/util/accounting"
+	"webapp/util/database"
 	"webapp/util/file"
 	"webapp/util/pythonmanager"
 	"webapp/util/session"
@@ -53,6 +54,7 @@ func OldFileCollection[fileidtype comparable, useruidtype socket.Socketidinterfa
 		filetobedelete := cachequeue.Top()
 		pythonprocessesmanager.Delete(filetobedelete.Uid)
 		cachequeue.Pop()
+		database.DeleteFileinfo(filetobedelete.Uid)
 		usersession, ok := sessionmanager.Get(filetobedelete.Useruid)
 		if !ok {
 			fmt.Println("didnot find the user of file to be deleted")
@@ -69,6 +71,7 @@ func AddFileToMemory[sessionidtype comparable, fileidtype comparable, socketidty
 	fileuid fileidtype, filename string, current int, max int, userid sessionidtype) {
 
 	sessionmanager.AddFile(userid, fileuid, filename, 0, 0, userid)
+	database.AddFileinfo(fileuid, userid)
 	sess, ok := sessionmanager.Get(userid)
 	if !ok {
 		fmt.Println("didnot find the user")
@@ -241,9 +244,10 @@ type DBGTemplateDatastruct struct {
 	Numbers      [][]int
 	Rates        []string
 	Categories   map[string]*accounting.Categoryinfo
+	Filename     string
 }
 
-func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csvpath_acc string) {
+func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csvpath_acc string, filename string) {
 	var t *template.Template
 	var headername string
 	var err error
@@ -271,6 +275,7 @@ func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csv
 		Numbers:      Numbers,
 		Rates:        Rates,
 		Categories:   Categories,
+		Filename:     filename,
 	}
 	if csvpath == "" {
 		fmt.Println("no file selected")
@@ -352,7 +357,7 @@ func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csv
 	for _, v := range DBGTemplateData.Categories {
 		v.SortEvent()
 	}
-	slog.Info("The datagram:", "1", fmt.Sprintf("%#v", DBGTemplateData))
+	//slog.Info("The datagram:", "1", fmt.Sprintf("%#v", DBGTemplateData))
 	t.Execute(w, DBGTemplateData)
 }
 func Sortdata(data [][]string) {

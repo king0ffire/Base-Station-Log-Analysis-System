@@ -1,3 +1,4 @@
 pyshark
 pandas
 openpyxl
+mysql-connector-python

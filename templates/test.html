@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>ECharts</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+</head>
+<body>
+    <div id="main" style="width: 600px;height:400px;"></div>
+    <div id="bar-tooltip" style="width:200px;height:150px;display:none;"></div>
+
+    <script type="text/javascript">
+        var chartDom = document.getElementById('main');
+        var myChart = echarts.init(chartDom);
+        var barTooltipDom = document.getElementById('bar-tooltip');
+        var barChart = echarts.init(barTooltipDom);
+        
+        // 定义条形图数据
+        var barData = {
+            'Category A': [120, 200, 150, 80, 70, 110, 130],
+            'Category B': [90, 140, 160, 130, 120, 100, 140]
+        };
+
+        var barOption = {
+            xAxis: {
+                type: 'category',
+                data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+            },
+            yAxis: {
+                type: 'value'
+            },
+            series: [{
+                data: [],
+                type: 'bar'
+            }]
+        };
+
+        barChart.setOption(barOption);
+
+        var option = {
+            tooltip: {
+                trigger: 'item',
+                formatter: function(params) {
+                    var category = params.name;
+                    var barDataForCategory = barData[category] || [];
+                    
+                    // 更新条形图数据
+                    barChart.setOption({
+                        series: [{
+                            data: barDataForCategory
+                        }]
+                    });
+
+                    // 生成条形图的HTML内容
+                    return `
+                        <div style="padding:10px">
+                          <strong>${params.name}</strong>: ${params.value}
+                          <div style="width:200px;height:150px;" id="bar-container"></div>
+                        </div>
+                    `;
+                },
+                position: function(point, params, dom, rect, size) {
+                    return [point[0] + 10, point[1] + 10];
+                }
+            },
+            series: [
+                {
+                    name: 'Access From',
+                    type: 'pie',
+                    radius: '50%',
+                    data: [
+                        {value: 1048, name: 'Category A'},
+                        {value: 735, name: 'Category B'},
+                        {value: 580, name: 'Category C'}
+                    ],
+                    emphasis: {
+                        itemStyle: {
+                            shadowBlur: 10,
+                            shadowOffsetX: 0,
+                            shadowColor: 'rgba(0, 0, 0, 0.5)'
+                        }
+                    }
+                }
+            ]
+        };
+
+        myChart.setOption(option);
+
+        // 监听 tooltip 显示事件
+        myChart.on('showTip', function(params) {
+            if (params.data) {
+                var barContainer = document.getElementById('bar-container');
+                if (barContainer) {
+                    barTooltipDom.style.display = 'block';
+                    barContainer.appendChild(barTooltipDom);
+                }
+            }
+        });
+
+        // 监听 tooltip 隐藏事件
+        myChart.on('hideTip', function() {
+            barTooltipDom.style.display = 'none';
+            document.body.appendChild(barTooltipDom);
+        });
+    </script>
+</body>
+</html>

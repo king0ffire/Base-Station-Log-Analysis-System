@@ -125,7 +125,7 @@
 
     <script src="../../static/monitor.js">  </script>
 
-    <script src="../../static/echarts.js"></script>
+    <script src="../../static/echarts_tooltipnohide.js"></script>
     <script>
         $(function () {
             drawLayer03Right($("#layer03_right_chart01 canvas").get(0), "#027825", {{ index .Rates 0}});
@@ -152,7 +152,9 @@
                 <label for="proto">文件名 : </label>&nbsp;&nbsp;
                 <input type="text" class="form-control" id="proto" name="filename" value="">&nbsp;&nbsp;
             </div>
+            <!--
             <button type="submit" class="btn btn-success">&nbsp;查&nbsp;&nbsp;&nbsp;看&nbsp;</button>&nbsp;&nbsp;
+            -->
         </form>
     </div>
 
@@ -274,7 +276,31 @@
             var results = regex.exec(location.search);
             return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
         };
-        document.getElementById("proto").value = geturlparameter("filename");
+        document.getElementById("proto").value = "{{.Filename}}";
+
+        var tbody=document.createElement("tbody");
+        function updateonetablerow(value)
+      {
+        var row=tbody.insertRow();
+        var time=value["Time"];
+        var errortype=value["Errortype"]
+        var device=value["Device"]
+        var info = value["Info"];
+        var cell1=row.insertCell(0);
+        cell1.innerHTML=time;
+        cell1.setAttribute("class","text-center")
+        var cell2=row.insertCell(1);
+        cell2.innerHTML=errortype;
+        cell2.setAttribute("class","text-center")
+        var cell3=row.insertCell(2);
+        cell3.innerHTML=device;
+        cell3.setAttribute("class","text-center")
+        var cell4=row.insertCell(3);
+        cell4.innerHTML=info;
+        cell4.setAttribute("class","text-center")
+      };
+        const host=window.location.host;
+        const myWebSocket = new WebSocket("ws://"+host+"/dbgitembyeventfilter_ws");
     </script>
 
     <script>
@@ -381,13 +407,16 @@
         var chartDom = document.getElementById('eventpie-01');
         var myChart = echarts.init(chartDom);
         var uniqueDom = {}
+        var inited={}
         for (let key in datasources) {
             uniqueDom[key] = document.createElement("div");
-            uniqueDom[key].myatt = false
+            inited[key]= false;
         }
         var option;
         option = {
             tooltip: {
+                triggerOn: 'none',
+                alwaysShowContent: false,
                 trigger: 'item',
                 position: 'right',
                 position: ['50%', '-250%'],
@@ -398,61 +427,114 @@
                     dom.style.visibility="visible";
                     console.log(dom);
                     return dom.outerHTML;
-                    */
-                   if (uniqueDom[params.name].myatt == true) {
+                    if (uniqueDom[params.name].myatt == true) {
                     return uniqueDom[params.name];
                    }
-                    var dom = uniqueDom[params.name];
-                    dom.style.height = "500px";
-                    dom.style.width = "1000px";
-                    var chart = echarts.init(dom);
-                    var option = {
-                        dataset: {
-                            dimensions: ['Event Name', 'Count'],
-                            source: datasources[params.name]
-                        },
-                        grid: { containLabel: true },
-                        xAxis: { name: 'amount' },
-                        yAxis: { type: 'category', inverse: true },
-                        series: [
-                            {
-                                type: 'bar',
-                                encode: {
-                                    x: 'Count',
-                                    y: 'Event Name'
-                                },
-                                label: {
-                                    show: true,
-                                    position: 'right'
-                                }
-                            }
-                        ],
-                        dataZoom: [
-                            {
-                                type: 'slider',
-                                show: true,
-                                yAxisIndex: [0],
-                                start: 0,
-                                end: 100
-                            },
-                            {
-                                type: 'inside',
-                                yAxisIndex: [0],
-                                start: 0,
-                                end: 100
-                            }
-                        ],
-                    }
-                    option && chart.setOption(option);
-                    /*
-                    setTimeout(function () {
-                        chart.setOption(option);
-                        chart.resize();
-                        console.log("chart resize");
-                        console.log(option.dataset.source)
-                    }, 1000);
                     */
-                    return chart.getDom();
+                   console.log('调用formatter')
+                   var outerdiv=document.createElement("div");
+                   outerdiv.style.height = "500px";
+                   outerdiv.style.width = "1000px";
+                   outerdiv.style.overflow = "auto";
+                   outerdiv.innerHTML=`<div></div> <div></div>`
+                    var dom = uniqueDom[params.name];
+                    dom.style.visibility="inherit";
+                    console.log(dom);
+                    if (inited[params.name]==false){
+                        console.log('初始化echarts');
+                        dom.style.height = "500px";
+                        dom.style.width = "1000px";
+                        dom.style.position = "absolute";
+                        
+                        var chart = echarts.init(dom);
+                        var option = {
+                            dataset: {
+                                dimensions: ['Event Name', 'Count'],
+                                source: datasources[params.name]
+                            },
+                            grid: { containLabel: true },
+                            xAxis: { name: 'amount' },
+                            yAxis: { type: 'category', inverse: true },
+                            series: [
+                                {
+                                    type: 'bar',
+                                    encode: {
+                                        x: 'Count',
+                                        y: 'Event Name'
+                                    },
+                                    label: {
+                                        show: true,
+                                        position: 'right'
+                                    }
+                                }
+                            ],
+                            dataZoom: [
+                                {
+                                    type: 'slider',
+                                    show: true,
+                                    yAxisIndex: [0],
+                                    start: 0,
+                                    end: 100
+                                },
+                                {
+                                    type: 'inside',
+                                    yAxisIndex: [0],
+                                    start: 0,
+                                    end: 100
+                                }
+                            ],
+                        }
+                        option && chart.setOption(option);
+                        chart.on('click', function(params) {
+                                //console.log(params);
+                                myWebSocket.send(JSON.stringify({
+                                    "eventname": params.name,
+                                    "fileid": geturlparameter("fileid"),
+                                }));
+                        });
+                        inited[params.name]=true;
+                    }
+                    var tabledom=document.createElement("table");
+                    tabledom.className="table table-hover table-responsive  table-condensed table-striped"
+                    tabledom.innerHTML=`
+                    <thead>
+                        <tr>
+                            <th class="text-center">time</th>
+                            <th class="text-center">type</th>
+                            <th class="text-center">device</th>
+                            <th class="text-center">info</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                    `;
+                    tabledom.style.overflow="hidden";
+                    tabledom.style.width="100%";
+                    tabledom.style.height="100%";
+                    buttom=document.createElement("button");
+                   buttom.innerHTML="back";
+                   buttom.onclick=function(){
+                    outerdiv.children[0].style.visibility="visible";
+                    outerdiv.children[1].style.visibility="hidden";
+                   }
+                    myWebSocket.onmessage = function (event) {                        
+                        var jsondata = JSON.parse(event.data);
+                        var eventdetaildiv=document.createElement("div");
+                        tbody=document.createElement('tbody')
+                        //const table = document.getElementById("table")
+                        jsondata.forEach(updateonetablerow);
+                        tabledom.replaceChild(tbody, tabledom.getElementsByTagName("tbody")[0]);
+                        
+                        eventdetaildiv.appendChild(buttom)
+                        eventdetaildiv.appendChild(tabledom)
+                        outerdiv.replaceChild(eventdetaildiv,outerdiv.children[1]);
+                        outerdiv.children[0].style.visibility="hidden";
+                        outerdiv.children[0]
+                    }
+                   
+                    outerdiv.replaceChild(dom,outerdiv.children[0]);
+
+                    return outerdiv;
                 },
                 enterable: true,
             },
@@ -467,11 +549,13 @@
                         { value: {{ with (index .Categories "未分类") }} {{.Count }} {{ end }}, name: "未分类" },
       ],
         emphasis: {
+            scale:true,
+            scaleSize: 30,
             itemStyle: {
                 shadowBlur: 10,
                     shadowOffsetX: 0,
                         shadowColor: 'rgba(0, 0, 0, 0.5)'
-            }
+            },
         },
         label: { position: 'inside' },
 
@@ -479,6 +563,30 @@
   ]
 };
         option && myChart.setOption(option);
+        var currenttooltip=null;
+        myChart.on('click', function(params) {
+                if(params.componentType==="series"){
+                    if(currenttooltip===params.dataIndex){
+                        myChart.dispatchAction({
+                            type: 'hideTip',
+                        });
+                        currenttooltip=null;
+                        //uniqueDom[params.name].children[0].style.visibility="hidden";
+                        console.log("hide tip");
+                    }else
+                    {
+                        myChart.dispatchAction({
+                            type: 'showTip',
+                            seriesIndex: params.seriesIndex,
+                            dataIndex: params.dataIndex,
+                        });
+                        currenttooltip=params.dataIndex;
+                        //uniqueDom[params.name].children[0].style.visibility="visible";
+                        console.log("show tip");
+                    }
+                }
+        });
+
 
     </script>
 

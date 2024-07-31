@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"webapp/util"
 	"webapp/util/cookie"
+	"webapp/util/database"
 	"webapp/util/file"
 	"webapp/util/pythonmanager"
 	"webapp/util/session"
@@ -35,6 +37,7 @@ func indexentry(w http.ResponseWriter, r *http.Request) {
 		}
 		if isnew {
 			sessionmanager.Add(userid)
+			database.AddUserinfo(userid)
 			fmt.Println("Add User:", userid)
 		}
 		t, err := template.ParseFiles("./templates/home/index.html")
@@ -223,7 +226,7 @@ func showresults_dbg(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("usersession not found")
 		return
 	}
-	_, ok = usersession.FileStatusManager.Get(fileid)
+	currentfilestatus, ok := usersession.FileStatusManager.Get(fileid)
 	if !ok {
 		fmt.Println("file status not found")
 		return
@@ -233,7 +236,7 @@ func showresults_dbg(w http.ResponseWriter, r *http.Request) {
 	if fileid == "" {
 		csvpath = ""
 	}
-	util.Renderbydbgfile(w, r, csvpath, csvpath_acc)
+	util.Renderbydbgfile(w, r, csvpath, csvpath_acc, currentfilestatus.Filename)
 }
 
 func showresults_ids(w http.ResponseWriter, r *http.Request) {
@@ -261,6 +264,49 @@ func showresults_ids(w http.ResponseWriter, r *http.Request) {
 	util.Renderbyidsfile(w, r, csvpath)
 }
 
+func showdbgitembyeventname(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("dbg open socket")
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer conn.Close()
+	defer fmt.Println("dbg close socket")
+	//升级后从中读出filter内容
+	for {
+		_, p, err := conn.ReadMessage()
+		if err != nil {
+			log.Println("read error:", err)
+			return
+		}
+		var jsonmessage map[string]interface{}
+		json.Unmarshal(p, &jsonmessage)
+		fileid := jsonmessage["fileid"].(string)
+		eventfilter := jsonmessage["eventname"].(string)
+
+		userid, ok := cookie.CookieGet(r).Values["id"].(string)
+		if !ok {
+			fmt.Println("userid not found")
+			return
+		}
+		usersession, ok := sessionmanager.Get(userid)
+		if !ok {
+			fmt.Println("usersession not found")
+			return
+		}
+		fmt.Println("current user id: ", userid)
+		currentfilestatus, ok := usersession.FileStatusManager.Get(fileid)
+		if !ok {
+			fmt.Println("file status not found")
+			return
+		}
+
+		//some query eventfilter and fileid
+		filtereddbgitems := database.GetByEventName(currentfilestatus.Uid, eventfilter)
+		conn.WriteJSON(filtereddbgitems)
+	}
+}
 func main() {
 	gob.Register(map[string]string{})
 	http.HandleFunc("/cache/", func(w http.ResponseWriter, r *http.Request) {
@@ -279,6 +325,7 @@ func main() {
 	http.HandleFunc("/uploadedfiles", uploadedfiles)
 	http.HandleFunc("/clearcache", clearcache)
 	http.HandleFunc("/ws", sockethandler_withfilter)
+	http.HandleFunc("/dbgitembyeventfilter_ws", showdbgitembyeventname)
 
 	err := http.ListenAndServe(localport, nil)
 	if err != nil {
