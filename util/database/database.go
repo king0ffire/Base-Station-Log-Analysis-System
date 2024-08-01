@@ -23,7 +23,7 @@ type DbgItem struct {
 
 func init() {
 	var err error
-	db, err = sql.Open("mysql", "root:root123@/")
+	db, err = sql.Open("mysql", "root:root123@tcp(127.0.0.1:3306)/")
 	if err != nil {
 		fmt.Println("fatal error:", err)
 	}

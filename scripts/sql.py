@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 mydb=None
 def init(fileuid):
     global mydb
-    mydb = mysql.connector.connect(host="localhost", user="root", password="root123")
+    mydb = mysql.connector.connect(host="localhost", user="root", password="root123",port="3306")
 
     cursor = mydb.cursor()
     logger.info("start sql")
