@@ -257,7 +257,7 @@ func showresults_ids(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("usersession not found")
 		return
 	}
-	_, ok = usersession.FileStatusManager.Get(fileid)
+	filestatus, ok := usersession.FileStatusManager.Get(fileid)
 	if !ok {
 		fmt.Println("file status not found")
 		return
@@ -266,7 +266,7 @@ func showresults_ids(w http.ResponseWriter, r *http.Request) {
 	if fileid == "" {
 		csvpath = ""
 	}
-	util.Renderbyidsfile(w, r, csvpath)
+	util.Renderbyidsfile(w, r, csvpath, filestatus.Filename)
 }
 
 func showdbgitembyeventname(w http.ResponseWriter, r *http.Request) {

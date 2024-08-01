@@ -174,9 +174,10 @@ type IDSTemplateDatastruct struct {
 	Data         [][]string
 	Downloadlink string
 	Htmlheader   string
+	Filename     string
 }
 
-func Renderbyidsfile(w http.ResponseWriter, r *http.Request, csvpath string) {
+func Renderbyidsfile(w http.ResponseWriter, r *http.Request, csvpath string, filename string) {
 	var t *template.Template
 	var headername string
 	var err error
@@ -192,14 +193,15 @@ func Renderbyidsfile(w http.ResponseWriter, r *http.Request, csvpath string) {
 		Data:         [][]string{},
 		Downloadlink: "",
 		Htmlheader:   headername,
+		Filename:     filename,
 	}
 	if csvpath == "" {
 		t.Execute(w, IDSTemplateData)
 		return
 	}
+	IDSTemplateData.Downloadlink = "../" + strings.ReplaceAll(csvpath, "\\", "/")
 	csvfile, err := os.Open(csvpath)
 	if err != nil {
-		IDSTemplateData.Downloadlink = "../" + strings.ReplaceAll(csvpath, "\\", "/")
 		t.Execute(w, IDSTemplateData)
 		return
 	}
@@ -208,7 +210,6 @@ func Renderbyidsfile(w http.ResponseWriter, r *http.Request, csvpath string) {
 	csvreader := csv.NewReader(csvfile)
 	csvdata, err := csvreader.ReadAll()
 	if err != nil {
-		IDSTemplateData.Downloadlink = "../" + strings.ReplaceAll(csvpath, "\\", "/")
 		t.Execute(w, IDSTemplateData)
 		fmt.Println("csvreader.ReadAll() error:", err)
 		return
@@ -220,7 +221,6 @@ func Renderbyidsfile(w http.ResponseWriter, r *http.Request, csvpath string) {
 	if len(csvdata) > 1 {
 		IDSTemplateData.Data = csvdata[1:]
 	}
-	fmt.Println("data:", IDSTemplateData)
 	t.Execute(w, IDSTemplateData)
 }
 

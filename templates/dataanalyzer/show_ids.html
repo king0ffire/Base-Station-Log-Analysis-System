@@ -80,7 +80,9 @@
                 <label for="proto">文件名 : </label>&nbsp;&nbsp;
                 <input type="text" class="form-control" id="proto" name="filename" value="">&nbsp;&nbsp;
             </div>
+            <!--
             <button type="submit" class="btn btn-success">&nbsp;查&nbsp;&nbsp;&nbsp;看&nbsp;</button>&nbsp;&nbsp;
+            -->
         </form>
     </div>
 
@@ -134,8 +136,7 @@
             var results = regex.exec(location.search);
             return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
         };
-        document.getElementById("proto").value = geturlparameter("filename");
-
+        document.getElementById("proto").value = "{{.Filename}}";
 
     </script>
 
