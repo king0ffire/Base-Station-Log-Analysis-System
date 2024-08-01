@@ -168,6 +168,14 @@ func AnnounceAllSocketsInUser[sessionidtype comparable, fileidtype comparable, s
 		v.Lock.Unlock()
 	}
 }
+
+type IDSTemplateDatastruct struct {
+	Header       []string
+	Data         [][]string
+	Downloadlink string
+	Htmlheader   string
+}
+
 func Renderbyidsfile(w http.ResponseWriter, r *http.Request, csvpath string) {
 	var t *template.Template
 	var headername string
@@ -179,31 +187,20 @@ func Renderbyidsfile(w http.ResponseWriter, r *http.Request, csvpath string) {
 		fmt.Println(err)
 		return
 	}
+	IDSTemplateData := IDSTemplateDatastruct{
+		Header:       []string{},
+		Data:         [][]string{},
+		Downloadlink: "",
+		Htmlheader:   headername,
+	}
 	if csvpath == "" {
-		t.Execute(w, struct {
-			Header       []string
-			Data         [][]string
-			Downloadlink string
-			Htmlheader   string
-		}{Data: [][]string{},
-			Header:       []string{},
-			Downloadlink: "",
-			Htmlheader:   headername,
-		})
+		t.Execute(w, IDSTemplateData)
 		return
 	}
 	csvfile, err := os.Open(csvpath)
 	if err != nil {
-		t.Execute(w, struct {
-			Header       []string
-			Data         [][]string
-			Downloadlink string
-			Htmlheader   string
-		}{Data: [][]string{},
-			Header:       []string{},
-			Downloadlink: "../" + strings.ReplaceAll(csvpath, "\\", "/"),
-			Htmlheader:   headername,
-		})
+		IDSTemplateData.Downloadlink = "../" + strings.ReplaceAll(csvpath, "\\", "/")
+		t.Execute(w, IDSTemplateData)
 		return
 	}
 	defer csvfile.Close()
@@ -211,29 +208,20 @@ func Renderbyidsfile(w http.ResponseWriter, r *http.Request, csvpath string) {
 	csvreader := csv.NewReader(csvfile)
 	csvdata, err := csvreader.ReadAll()
 	if err != nil {
-		fmt.Fprintln(w, "Read failed:", err)
+		IDSTemplateData.Downloadlink = "../" + strings.ReplaceAll(csvpath, "\\", "/")
+		t.Execute(w, IDSTemplateData)
+		fmt.Println("csvreader.ReadAll() error:", err)
+		return
 	}
 
-	t.Execute(w, struct {
-		Header       []string
-		Data         [][]string
-		Downloadlink string
-		Htmlheader   string
-	}{Data: func() [][]string {
-		if len(csvdata) > 1 {
-			return csvdata[1:]
-		}
-		return [][]string{}
-	}(),
-		Header: func() []string {
-			if len(csvdata) > 0 {
-				return csvdata[0]
-			}
-			return []string{}
-		}(),
-		Downloadlink: "../" + strings.ReplaceAll(csvpath, "\\", "/"),
-		Htmlheader:   headername,
-	})
+	if len(csvdata) > 0 {
+		IDSTemplateData.Header = csvdata[0]
+	}
+	if len(csvdata) > 1 {
+		IDSTemplateData.Data = csvdata[1:]
+	}
+	fmt.Println("data:", IDSTemplateData)
+	t.Execute(w, IDSTemplateData)
 }
 
 type DBGTemplateDatastruct struct {

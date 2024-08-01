@@ -42,7 +42,7 @@ def sctpanalysis(csvfile_id,csvwriter_id, sctp_file_list,cache_path,filter1,filt
     from ids_pyshark import pcapInfoToListBy2Filters, process_one_file_by2filters
     logger=logging.getLogger(__name__)
     logger.info("sctp started")
-    csvwriter_id.writerows(
+    csvwriter_id.writerow(
         [
             "Filename",
             "Pkt Num",
