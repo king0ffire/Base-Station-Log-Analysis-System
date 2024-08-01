@@ -16,5 +16,4 @@ def get_tag(countmap, categories):
     for key, categorylist in categories.items():
         for category in categorylist:
                 tags[category].append(key)
-                
     return tags

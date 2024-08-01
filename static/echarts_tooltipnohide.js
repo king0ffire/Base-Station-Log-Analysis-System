@@ -27645,14 +27645,14 @@
             var el = e.target;
             var dispatcher = findEventDispatcher(el, isHighDownDispatcher);
             if (dispatcher) {
-              handleGlobalMouseOverForHighDown(dispatcher, e, ecIns._api);
+              //handleGlobalMouseOverForHighDown(dispatcher, e, ecIns._api);
               markStatusToUpdate(ecIns);
             }
           }).on('mouseout', function (e) {
             var el = e.target;
             var dispatcher = findEventDispatcher(el, isHighDownDispatcher);
             if (dispatcher) {
-              handleGlobalMouseOutForHighDown(dispatcher, e, ecIns._api);
+              //handleGlobalMouseOutForHighDown(dispatcher, e, ecIns._api);
               markStatusToUpdate(ecIns);
             }
           }).on('click', function (e) {

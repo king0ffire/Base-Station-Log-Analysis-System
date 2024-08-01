@@ -23,7 +23,7 @@ def createtable(fileuid):
     mydb.cursor().execute(
         "CREATE TABLE dbgitems_%s (id int auto_increment primary key, time VARCHAR(255), errortype VARCHAR(255), \
                    device VARCHAR(255), info VARCHAR(511), event VARCHAR(255), fileid VARCHAR(255), \
-                       foreign key (fileid) references fileinfo(fileid) )" % fileuid
+                       foreign key (fileid) references fileinfo(fileid) on delete cascade )" % fileuid
     )
     
     logger.info("file table created")

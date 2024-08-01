@@ -5,7 +5,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"log/slog"
+
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -52,14 +52,14 @@ func OldFileCollection[fileidtype comparable, useruidtype socket.Socketidinterfa
 	if cachequeue.Len() > 99 {
 		fmt.Println("deleting expired file")
 		filetobedelete := cachequeue.Top()
-		pythonprocessesmanager.Delete(filetobedelete.Uid)
-		cachequeue.Pop()
-		database.DeleteFileinfo(filetobedelete.Uid)
 		usersession, ok := sessionmanager.Get(filetobedelete.Useruid)
 		if !ok {
 			fmt.Println("didnot find the user of file to be deleted")
-			return
 		}
+
+		pythonprocessesmanager.Delete(filetobedelete.Uid)
+		cachequeue.Pop()
+		database.DeleteFileinfo(filetobedelete.Uid)
 		usersession.FileStatusManager.Delete(filetobedelete.Uid)
 		DeleteFileFromLocal(uploadpath, fmt.Sprintf("%v", filetobedelete.Uid))
 	}
@@ -318,7 +318,6 @@ func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csv
 	if err != nil {
 		fmt.Println("read failed", err)
 	}
-	slog.Info("acc read", tempNumbers)
 	for i, strrow := range tempNumbers[:4] {
 		for j, str := range strrow {
 			DBGTemplateData.Numbers[i][j], _ = strconv.Atoi(str)
@@ -357,7 +356,6 @@ func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csv
 	for _, v := range DBGTemplateData.Categories {
 		v.SortEvent()
 	}
-	//slog.Info("The datagram:", "1", fmt.Sprintf("%#v", DBGTemplateData))
 	t.Execute(w, DBGTemplateData)
 }
 func Sortdata(data [][]string) {
@@ -403,8 +401,19 @@ func Sortdata(data [][]string) {
 	}
 */
 
-func DeleteFileFromLocal(uploadpath string, uid string) {
-	os.RemoveAll(filepath.Join(uploadpath, uid))
+func DeleteFileFromLocal(uploadpath string, uid string) error {
+	err := os.RemoveAll(filepath.Join(uploadpath, uid))
+	if err != nil {
+		go func() {
+			time.Sleep(time.Second * 1)
+			err2 := os.RemoveAll(filepath.Join(uploadpath, uid))
+			fmt.Println("retried delete file")
+			if err2 != nil {
+				fmt.Println("retry error:", err2)
+			}
+		}()
+	}
+	return err
 }
 
 func MultiPartFileSaver(savepath string, file *multipart.File, handler *multipart.FileHeader) (string, bool) {

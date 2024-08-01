@@ -264,11 +264,12 @@
     </div>
     {{end}}
     {{end}}
+    <!--
     <div id="UE接入" style="visibility: hidden ; position: absolute; width: 1000px; height: 500px;"></div>
     <div id="S1切换入" style="visibility: hidden; position: absolute; width: 1000px; height: 500px;"></div>
     <div id="S1切换出" style="visibility: hidden; position: absolute; width: 1000px; height: 500px;"></div>
     <div id="未分类" style="visibility: hidden; position: absolute; width: 1000px; height: 500px;"></div>
-
+    --> 
     <script>
         function geturlparameter(name) {
             name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
@@ -436,6 +437,7 @@
                    outerdiv.style.height = "500px";
                    outerdiv.style.width = "1000px";
                    outerdiv.style.overflow = "auto";
+                   outerdiv.style.userSelect="text";
                    outerdiv.innerHTML=`<div></div> <div></div>`
                     var dom = uniqueDom[params.name];
                     dom.style.visibility="inherit";
@@ -511,10 +513,12 @@
                     tabledom.style.overflow="hidden";
                     tabledom.style.width="100%";
                     tabledom.style.height="100%";
+
                     buttom=document.createElement("button");
                    buttom.innerHTML="back";
+                   buttom.className="btn btn-success";
                    buttom.onclick=function(){
-                    outerdiv.children[0].style.visibility="visible";
+                    outerdiv.children[0].style.visibility="inherit";
                     outerdiv.children[1].style.visibility="hidden";
                    }
                     myWebSocket.onmessage = function (event) {                        
@@ -529,7 +533,7 @@
                         eventdetaildiv.appendChild(tabledom)
                         outerdiv.replaceChild(eventdetaildiv,outerdiv.children[1]);
                         outerdiv.children[0].style.visibility="hidden";
-                        outerdiv.children[0]
+
                     }
                    
                     outerdiv.replaceChild(dom,outerdiv.children[0]);
@@ -543,21 +547,31 @@
                     type: 'pie',
                     radius: '80%',
                     data: [
+                        {{range $i, $v := .Categories }}
+                        {value: {{ with $v }}{{.Count }}{{ end }} , name: '{{$i}}' },
+                        {{end}}
+                        /*
                         { value: {{ with (index .Categories "UE接入") }}{{.Count }}{{ end }} , name: 'UE接入' },
                         { value: {{ with (index .Categories "S1切换入") }} {{.Count }} {{ end }}, name: "S1切换入" },
                         { value: {{ with (index .Categories "S1切换出") }} {{.Count }} {{ end }}, name: "S1切换出" },
                         { value: {{ with (index .Categories "未分类") }} {{.Count }} {{ end }}, name: "未分类" },
+                         */
       ],
         emphasis: {
             scale:true,
             scaleSize: 30,
+            focus: 'self',
             itemStyle: {
                 shadowBlur: 10,
                     shadowOffsetX: 0,
                         shadowColor: 'rgba(0, 0, 0, 0.5)'
             },
         },
-        label: { position: 'inside' },
+        label: {
+        position: 'outer',
+        alignTo: 'edge',
+        margin: '25%',
+    }
 
     }
   ]
@@ -570,6 +584,11 @@
                         myChart.dispatchAction({
                             type: 'hideTip',
                         });
+                        myChart.dispatchAction({
+                            type: 'downplay',
+                            seriesIndex: params.seriesIndex,
+                            dataIndex: params.dataIndex,
+                        });
                         currenttooltip=null;
                         //uniqueDom[params.name].children[0].style.visibility="hidden";
                         console.log("hide tip");
@@ -577,6 +596,16 @@
                     {
                         myChart.dispatchAction({
                             type: 'showTip',
+                            seriesIndex: params.seriesIndex,
+                            dataIndex: params.dataIndex,
+                        });
+                        myChart.dispatchAction({
+                            type: 'downplay',
+                            seriesIndex: params.seriesIndex,
+                            dataIndex: currenttooltip,
+                        });
+                        myChart.dispatchAction({
+                            type: 'highlight',
                             seriesIndex: params.seriesIndex,
                             dataIndex: params.dataIndex,
                         });

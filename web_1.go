@@ -195,8 +195,13 @@ func clearcache(w http.ResponseWriter, r *http.Request) {
 	for _, v := range userholdingfiles {
 		pythonprocessesmanager.Delete(v.Uid)
 		cachequeue.Delete(v.Uid)
+		database.DeleteFileinfo(v.Uid)
+		database.Deletedbgitemstable(v.Uid)
 		usersession.FileStatusManager.Delete(v.Uid)
-		util.DeleteFileFromLocal(uploadpath, v.Uid)
+		err := util.DeleteFileFromLocal(uploadpath, v.Uid)
+		if err != nil {
+			fmt.Println("delete local file and directory error:", err)
+		}
 		fmt.Println("cleared cache:", v.Uid)
 	}
 }

@@ -92,6 +92,17 @@ func DeleteFileinfo[fileidtype comparable](fileid fileidtype) {
 		return
 	}
 }
+
+func Deletedbgitemstable[fileidtype comparable](fileid fileidtype) {
+	var err error
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancelfunc()
+	_, err = db.ExecContext(ctx, "drop table dbgitems_"+fmt.Sprintf("%v", fileid))
+	if err != nil {
+		fmt.Printf("Error %s when delete dbgitems_%s\n", err, fmt.Sprintf("%v", fileid))
+		return
+	}
+}
 func AddFileinfo[fileidtype comparable, useridtype comparable](fileid fileidtype, userid useridtype) {
 	var err error
 	ctx, cancelfunc := context.WithTimeout(context.Background(), 2*time.Second)

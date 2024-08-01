@@ -100,12 +100,12 @@ def lineswithpattern(fileinfo, pattern):
             device = remain[0].strip()+" |"
             info = remain[1].strip() if len(remain) > 1 else ""
             extractedpattern = matchobj.group()
-            currentname = extractedpattern.split(" ", 1)
-            if len(currentname) <= 1:  # 面向结果编程
+            eventname = extractedpattern.split(" ", 1)
+            if len(eventname) <= 1:  # 面向结果编程
                     continue
-            currentname = currentname[1].strip()
-            if currentname != "":
-                    formatedItems.append((date, errortype, device, info, currentname))
+            eventname = eventname[1].strip()
+            if eventname != "":
+                    formatedItems.append((date, errortype, device, info, eventname))
     return formatedItems
 
 
@@ -144,3 +144,60 @@ def ParseFiles_tosql(path_list, pattern):
                     info = f.readlines()
                     formatedItems.extend(lineswithpattern(info, pattern))
         return formatedItems
+
+
+
+
+def lineswithpattern_patternlist(fileinfo, patternlist,countonlylist):
+    formatedItems=[]
+    countonly=[0 for i in range(len(countonlylist))]
+    for line in fileinfo:
+        for pattern in patternlist:
+            matchobj=patterninline(line, pattern)
+            if matchobj:
+                line=line.strip()
+                date = line[0:15].strip()
+                remain = line[16:].split(" ", 1)
+                errortype = remain[0].strip()
+                remain = remain[1]
+                remain = remain.split("|", 1)
+                device = remain[0].strip()+" |"
+                info = remain[1].strip() if len(remain) > 1 else ""
+                extractedpattern = matchobj.group()
+                eventname = extractedpattern.split(" ", 1)
+                if len(eventname) <= 1:  # 面向结果编程
+                        continue
+                eventname = eventname[1].strip()
+                if eventname != "":
+                        formatedItems.append((date, errortype, device, info, eventname))
+        for i in range(len(countonly)):
+            matchobj=patterninline(line, countonlylist[i])
+            if matchobj:
+                countonly[i]+=1
+            
+    return formatedItems,countonly
+
+
+
+def ParseFiles_tosql_multithread_patternlist(path_list, patternlist):
+    formatedItems = []
+    objlist=[]
+    fs=[]
+    with ThreadPoolExecutor() as executor:
+        for fileitem in path_list:
+            if fileitem[-3:] == ".gz":
+                f= gzip.open(fileitem)
+                objlist.append(f)
+                f2=io.TextIOWrapper(f,encoding='utf-8') 
+                objlist.append(f2) 
+                fs.append(executor.submit(lineswithpattern, f2, patternlist) )
+            elif fileitem[-4:] != ".csv":
+                f= open(fileitem)
+                objlist.append(f)
+                info = f.readlines()
+                fs.append(executor.submit(lineswithpattern, info, patternlist) )
+        for future in as_completed(fs):
+            formatedItems.extend(future.result())
+    for obj in objlist:
+        obj.close()
+    return formatedItems

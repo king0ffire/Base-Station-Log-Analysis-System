@@ -1,8 +1,8 @@
 import asyncio
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, ProcessPoolExecutor
 import logging.handlers
 import queue
-
+from collections import Counter
 import os
 import tarfile
 import csv
@@ -13,8 +13,6 @@ import shutil
 import logging
 import cProfile
 
-from dbcount import ParseFiles_tosql_multithread
-
 def mapget(map, key):
     if key in map:
         return map[key]
@@ -23,7 +21,7 @@ def mapget(map, key):
 
 
 
-debug = True
+debug = False
 
 #暂时不用
 '''
@@ -39,10 +37,81 @@ def CategoryCount():
     csvwriter_acc.writerow(["S1切换出", categoriescount["S1切换出"]])
     csvwriter_acc.writerow(["未分类", other])
 '''    
-    
+
+def sctpanalysis(csvfile_id,csvwriter_id, sctp_file_list,cache_path,filter1,filter2, mode=0):
+    from ids_pyshark import pcapInfoToListBy2Filters, process_one_file_by2filters
+    logger=logging.getLogger(__name__)
+    logger.info("sctp started")
+    csvwriter_id.writerows(
+        [
+            "Filename",
+            "Pkt Num",
+            "Time",
+            "Source IP",
+            "Destination IP",
+            "Protocol",
+            "Summary Info",
+            "MME-ID",
+            "ENB-ID",
+        ]
+    ) 
+    for i, filename in enumerate(sctp_file_list):
+        if filename[-3:] == ".gz":
+            with gzip.open(filename) as f:
+                with open(
+                    os.path.join(
+                        cache_path, os.path.splitext(os.path.basename(filename))[0]
+                    ),
+                    "wb",
+                ) as f2:
+                    f2.write(f.read())
+                    sctp_file_list[i] = f2.name
+    if mode == 0:
+        for filename in sctp_file_list:
+            # csvwriter_id.writerow([os.path.basename(filename),'','','','','','',''])
+            process_one_file_by2filters(csvwriter_id, filename, filter1, filter2)
+            csvfile_id.flush()
+            print("sctp_finished_one")
+            sys.stdout.flush()
+    elif mode == 1:
+        with ThreadPoolExecutor() as executor:
+            fs = [
+                executor.submit(
+                    pcapInfoToListBy2Filters,
+                    filename,
+                    filter1,
+                    filter2,
+                    asyncio.new_event_loop(),
+                )
+                for filename in sctp_file_list
+            ]
+            for future in as_completed(fs):
+                csvwriter_id.writerows(future.result())
+                csvfile_id.flush()
+                print("sctp_finished_one")
+                sys.stdout.flush()
+        print("multithread success")
+    elif mode == 2:
+        with ProcessPoolExecutor() as executor:
+            fs = [
+                executor.submit(
+                    pcapInfoToListBy2Filters,
+                    filename,
+                    filter1,
+                    filter2,
+                )
+                for filename in sctp_file_list
+            ]
+            for future in as_completed(fs):
+                csvwriter_id.writerows(future.result())
+                csvfile_id.flush()
+                print("sctp_finished_one")
+                sys.stdout.flush()
+        print("multithread success")
+    logger.info("sctp finished")
+
 
 # mode 0 is single thread， mode 1 is multithread
-
 def run(filelocation, mode=0):
     filter1 = "s1ap.MME_UE_S1AP_ID"
     filter2 = "s1ap.ENB_UE_S1AP_ID"
@@ -57,12 +126,12 @@ def run(filelocation, mode=0):
 
     queue_listener = configure_logger(extracteddir)
     queue_listener.start()
-    from ids_pyshark import pcapInfoToListBy2Filters, process_one_file_by2filters
-    from dbcount import counter_FileListby2patterns, ParseFiles, ParseFiles_tosql
-    from category import get_category,get_tag
+
+
+    from util import Parsefilelist
     import sql
-    executor=ThreadPoolExecutor() 
-    executor.submit(sql.init(fileuid))
+    executor_0=ThreadPoolExecutor() 
+    executor_0.submit(sql.init,fileuid)
         
     
     logger = logging.getLogger(__name__)
@@ -91,141 +160,91 @@ def run(filelocation, mode=0):
     if not os.path.exists(cache_path):
         os.makedirs(cache_path)
 
-    logger.info("start dbg")
+
     fourEqualPattern = r"====[^\[]*"
     fiveDashPattern = r"-----[^-\[\n]+"
     pattern1 = r"[X2AP]:Sending UE CONTEXT RELEASE"
     pattern2 = r"Received HANDOVER REQUEST"
-    csvwriter_dbg.writerow(["Event Name", "Counts", "Tags"])
-    countmap = counter_FileListby2patterns(
-        dbg_file_list, fourEqualPattern, fiveDashPattern
-    )
-
+    
+    executor_1 = ThreadPoolExecutor()
+    future=executor_1.submit(sctpanalysis, csvfile_id, csvwriter_id, sctp_file_list, cache_path, filter1,filter2,mode)
+    logger.info("future running: %s"%future.running())
+    
+    #countmap = counter_FileListby2patterns(dbg_file_list, fourEqualPattern, fiveDashPattern)
     #db
-    executor.shutdown(wait=True)
-    executor=None
-    logger.info("inserting into database")
+    #单独的线程-1
+    logger.info("start dbg")
+    formatteditems, countlist=Parsefilelist(dbg_file_list, [fourEqualPattern, fiveDashPattern], [pattern1,pattern2])
+    logger.info("dbg analisis finished, dbg file wont open again")
+    executor_0.shutdown(wait=True)
+    executor_0=None
+
+    #单独的线程- 2<-1
     cursor=sql.mydb.cursor()
     sqlsentence=f"insert into dbgitems_{fileuid} values (null,%s,%s,%s,%s,%s,'{fileuid}')"
-    with ThreadPoolExecutor() as executor:
-            fs = [
-                executor.submit(
-                    ParseFiles_tosql_multithread,
-                    dbg_file_list,
-                    fourEqualPattern,
-                )
-                ,
-                executor.submit(
-                    ParseFiles_tosql_multithread,
-                    dbg_file_list,
-                    fiveDashPattern,
-                )
-            ]
-            for future in as_completed(fs):
-                cursor.executemany(sqlsentence,future.result())
-    sql.mydb.commit()
-    logger.info("inserted into database")
+    executor=ThreadPoolExecutor()
+    executor.submit(cursor.executemany,sqlsentence,formatteditems)
     
-
+    #单独的线程- 2<-1
+    from category import get_category,get_tag
+    countmap=Counter([tup[4] for tup in formatteditems])
     categories = get_category(os.path.join(os.path.dirname(sys.argv[0]), "dbg信令分类_唯一分类.xlsx"))
     tags=get_tag(countmap, categories)
+    
+    
 
+    dbgfileinfo=[["Event Name", "Counts", "Tags"]]
     for key, value in countmap.items():
         if len(tags[key]) == 0:
             tags[key].append("未分类")
-        csvwriter_dbg.writerow([key, value, tags[key]])
-
+        dbgfileinfo.append([key, value, tags[key]])
+    csvwriter_dbg.writerows(dbgfileinfo)
     csvfile_dbg.close()
+    executor.shutdown(wait=True)
+    executor=None
+    sql.mydb.commit()
     logger.info("dbg finished")
 
 
-    listofpattern1 = len(ParseFiles(dbg_file_list, pattern1))
-    listofpattern2 = len(ParseFiles(dbg_file_list, pattern2))
+    listofpattern1 = countlist[0]
+    listofpattern2 = countlist[1]
     with open(os.path.join(extracteddir, "accounting.csv"), "w", newline="",encoding="utf-8") as f:
         csvwriter_acc = csv.writer(f)
-
-        csvwriter_acc.writerow(
+        accinfo=[]
+        accinfo.append(
             [
                 mapget(countmap, "rrc connection setup complete"),
                 mapget(countmap, "rrc connection request"),
             ]
         )
-        csvwriter_acc.writerow(
+        accinfo.append(
             [
                 mapget(countmap, "rrc connection reestablishement complete"),
                 mapget(countmap, "rrc connection reestablishement request"),
             ]
         )
-        csvwriter_acc.writerow(
+        accinfo.append(
             [
                 mapget(countmap, "initial context setup response"),
                 mapget(countmap, "initial ue message"),
             ]
         )
-        csvwriter_acc.writerow(
+        accinfo.append(
             [
                 mapget(countmap, "handover notify") + listofpattern1,
                 mapget(countmap, "handover request") + listofpattern2,
             ]
         )
-
-
+        csvwriter_acc.writerows(accinfo)
     logger.info("accounting finished")
 
     print(len(sctp_file_list))
     sys.stdout.flush()
-    logger.info("sctp started")
-    csvwriter_id.writerow(
-        [
-            "Filename",
-            "Pkt Num",
-            "Time",
-            "Source IP",
-            "Destination IP",
-            "Protocol",
-            "Summary Info",
-            "MME-ID",
-            "ENB-ID",
-        ]
-    )
-    for i, filename in enumerate(sctp_file_list):
-        if filename[-3:] == ".gz":
-            with gzip.open(filename) as f:
-                with open(
-                    os.path.join(
-                        cache_path, os.path.splitext(os.path.basename(filename))[0]
-                    ),
-                    "wb",
-                ) as f2:
-                    f2.write(f.read())
-                    sctp_file_list[i] = f2.name
-    if mode == 0:
-        for filename in sctp_file_list:
-            # csvwriter_id.writerow([os.path.basename(filename),'','','','','','',''])
-            process_one_file_by2filters(csvwriter_id, filename, filter1, filter2)
-            csvfile_id.flush()
-            print("sctp_finished_one")
-            sys.stdout.flush()
 
-    elif mode == 1:
-        with ThreadPoolExecutor() as executor:
-            fs = [
-                executor.submit(
-                    pcapInfoToListBy2Filters,
-                    filename,
-                    filter1,
-                    filter2,
-                    asyncio.new_event_loop(),
-                )
-                for filename in sctp_file_list
-            ]
-            for future in as_completed(fs):
-                csvwriter_id.writerows(future.result())
-                csvfile_id.flush()
-                print("sctp_finished_one")
-                sys.stdout.flush()
-        print("multithread success")
-    logger.info("sctp finished")
+    #wait the sctp thread
+    executor_1.shutdown(wait=True)
+    executor_1=None
+    
     shutil.rmtree(os.path.join(extracteddir, "logs"))
     shutil.rmtree(cache_path)
     logger.info("remove cache")

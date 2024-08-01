@@ -2,6 +2,7 @@ from pyshark.capture.capture import TSharkCrashException
 import pyshark
 from os.path import basename
 
+
 def pcapInfoToListBy2Filters(filename, filter1, filter2, eventloop=None):
     csvlist=[]
     display_filter=filter1+"||"+filter2
@@ -11,7 +12,8 @@ def pcapInfoToListBy2Filters(filename, filter1, filter2, eventloop=None):
         with pyshark.FileCapture(filename,only_summaries=True,display_filter=display_filter,eventloop=eventloop) as capsummary:
             try:
                 with pyshark.FileCapture(filename,only_summaries=False,display_filter=display_filter,use_ek=True,eventloop=eventloop) as capdetail: 
-                    capdetail.load_packets()
+                    #capdetail.load_packets()
+                    #capsummary.load_packets()
                     for packetsummary, packetdetail in zip(capsummary, capdetail): 
                             csvlist.append([basename(filename),packetsummary.no,packetdetail.sniff_timestamp,
                                             packetsummary.source,packetsummary.destination,
