@@ -18,25 +18,14 @@ func init() {
 	store.Options.Secure = false
 	store.Options.SameSite = http.SameSiteLaxMode
 }
-func CookieInit(w http.ResponseWriter, r *http.Request) bool {
-	//gob.Register(map[string]string{})
-	session, err := store.Get(r, "session_name")
+
+func GenerateNewId(w http.ResponseWriter, r *http.Request, cook *sessions.Session) {
+	cook.Values["id"] = strconv.FormatInt(time.Now().UnixNano(), 10)
+	err := cook.Save(r, w)
 	if err != nil {
-		fmt.Println("error init session:", err)
-		return false
+		fmt.Println("error saving cookie:", err)
 	}
-	if session.IsNew {
-		session.Values["id"] = strconv.FormatInt(time.Now().UnixNano(), 10)
-		err = session.Save(r, w)
-		fmt.Println("cookie init")
-		return true
-	} else {
-		fmt.Println("cookie exist")
-	}
-	if err != nil {
-		fmt.Println("error saving session:", err)
-	}
-	return false
+	fmt.Println("cookie init")
 }
 
 /*

@@ -17,11 +17,14 @@ import (
 	"text/template"
 	"time"
 	"webapp/util/accounting"
+	"webapp/util/cookie"
 	"webapp/util/database"
 	"webapp/util/file"
 	"webapp/util/pythonmanager"
 	"webapp/util/session"
 	"webapp/util/socket"
+
+	"github.com/gorilla/sessions"
 )
 
 func FileListNameFilter(FileList []string, filter string) []string {
@@ -44,24 +47,36 @@ func FileListNameFilter(FileList []string, filter string) []string {
 	}
 */
 
-func OldFileCollection[fileidtype comparable, useruidtype socket.Socketidinterface](
-	sessionmanager *session.SessionStatusManager[fileidtype, fileidtype, useruidtype],
+func OldFileCollection[sessionidtype comparable, fileidtype comparable, socketidtype socket.Socketidinterface](
+	sessionmanager *session.SessionStatusManager[sessionidtype, fileidtype, socketidtype],
 	pythonprocessesmanager *pythonmanager.PythonProcessStatusManager[fileidtype],
-	cachequeue *file.FileCacheQueue[fileidtype, fileidtype],
-	fileuid fileidtype, uploadpath string, userid fileidtype) {
+	cachequeue *file.FileCacheQueue[fileidtype, sessionidtype],
+	fileuid fileidtype, uploadpath string, userid sessionidtype) {
 	if cachequeue.Len() > 99 {
 		fmt.Println("deleting expired file")
 		filetobedelete := cachequeue.Top()
 		usersession, ok := sessionmanager.Get(filetobedelete.Useruid)
 		if !ok {
-			fmt.Println("didnot find the user of file to be deleted")
+			fmt.Println("didnot find the user owning file to be deleted")
 		}
 
-		pythonprocessesmanager.Delete(filetobedelete.Uid)
-		cachequeue.Pop()
-		database.DeleteFileinfo(filetobedelete.Uid)
-		usersession.FileStatusManager.Delete(filetobedelete.Uid)
-		DeleteFileFromLocal(uploadpath, fmt.Sprintf("%v", filetobedelete.Uid))
+		ForceStopAndDeleteFile(fileuid, uploadpath, usersession, pythonprocessesmanager, cachequeue)
+	}
+}
+
+func ForceStopAndDeleteFile[sessionidtype comparable, fileidtype comparable, socketidtype socket.Socketidinterface](fileid fileidtype, uploadpath string,
+	usersession *session.SessionStatus[sessionidtype, fileidtype, socketidtype],
+	pythonprocessesmanager *pythonmanager.PythonProcessStatusManager[fileidtype],
+	cachequeue *file.FileCacheQueue[fileidtype, sessionidtype]) {
+
+	pythonprocessesmanager.Delete(fileid)
+	cachequeue.Delete(fileid)
+	database.DeleteFileinfo(fileid)
+	database.Deletedbgitemstable(fileid)
+	usersession.FileStatusManager.Delete(fileid)
+	err := DeleteFileFromLocal(uploadpath, fmt.Sprintf("%v", fileid))
+	if err != nil {
+		fmt.Println("delete local file and directory error:", err)
 	}
 }
 
@@ -435,4 +450,22 @@ func MultiPartFileSaver(savepath string, file *multipart.File, handler *multipar
 				util.FileStatusMapLock.Unlock()
 			}*/
 	}
+}
+
+func NewUserintoMemory[fileidtype comparable, socketidtype socket.Socketidinterface](w http.ResponseWriter, r *http.Request,
+	cook *sessions.Session, sessionmanager *session.SessionStatusManager[string, fileidtype, socketidtype]) {
+	cookie.GenerateNewId(w, r, cook)
+	userid, ok := cookie.CookieGet(r).Values["id"].(string)
+	if !ok {
+		fmt.Println("userid assert string failed")
+		return
+	}
+	sessionmanager.Add(userid)
+	database.AddUserinfo(userid)
+	time.AfterFunc(48*time.Hour, func() {
+		database.DeleteUserinfo(userid)
+		sessionmanager.Delete(userid)
+		fmt.Println("Delete User since expired:", userid)
+	})
+	fmt.Println("Add User:", userid)
 }

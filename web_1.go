@@ -29,16 +29,21 @@ var pythonprocessesmanager = pythonmanager.NewManager[string]()
 
 func indexentry(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
-		isnew := cookie.CookieInit(w, r) //这个浏览器的唯一身份在此定义
-		userid, ok := cookie.CookieGet(r).Values["id"].(string)
-		if !ok {
-			fmt.Println("userid not found")
-			return
-		}
-		if isnew {
-			sessionmanager.Add(userid)
-			database.AddUserinfo(userid)
-			fmt.Println("Add User:", userid)
+		cook := cookie.CookieGet(r)
+		if cook.IsNew {
+			util.NewUserintoMemory(w, r, cook, sessionmanager)
+		} else {
+			fmt.Println("cookie exist on brower")
+			userid, ok := cookie.CookieGet(r).Values["id"].(string)
+			if !ok {
+				fmt.Println("userid assert string failed")
+				return
+			}
+			_, ok = sessionmanager.Get(userid)
+			if !ok {
+				fmt.Println("but session expired on backend")
+				util.NewUserintoMemory(w, r, cook, sessionmanager)
+			}
 		}
 		t, err := template.ParseFiles("./templates/home/index.html")
 		if err != nil {
@@ -193,15 +198,7 @@ func clearcache(w http.ResponseWriter, r *http.Request) {
 	}
 	_, userholdingfiles := usersession.FileStatusManager.KeyAndValue()
 	for _, v := range userholdingfiles {
-		pythonprocessesmanager.Delete(v.Uid)
-		cachequeue.Delete(v.Uid)
-		database.DeleteFileinfo(v.Uid)
-		database.Deletedbgitemstable(v.Uid)
-		usersession.FileStatusManager.Delete(v.Uid)
-		err := util.DeleteFileFromLocal(uploadpath, v.Uid)
-		if err != nil {
-			fmt.Println("delete local file and directory error:", err)
-		}
+		util.ForceStopAndDeleteFile(v.Uid, uploadpath, usersession, pythonprocessesmanager, cachequeue)
 		fmt.Println("cleared cache:", v.Uid)
 	}
 }
