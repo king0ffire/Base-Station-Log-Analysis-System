@@ -3,9 +3,8 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 import gzip
 import io
 import re
-import regex
 import logging
-import aiofiles
+
 import asyncio
 #import mysql.connector
 logger = logging.getLogger(__name__)
@@ -420,6 +419,7 @@ def lineswithpattern_patternlist_4(conn, precompiledsql,filename, listoffour):
 
 
 async def lineswithpattern_patternlist_async(conn, precompiledsql,filename, listoffour):
+    
     with conn.cursor() as cursor:
         async with aiofiles.open(filename) as stream:
                 stream=await stream.readlines()
@@ -483,6 +483,8 @@ def Parsefilelist_3(pool,precompiledsql, filelist, listoffour, mode=0):
         conn.commit()
         conn.close()
     elif mode == 3:
+        global aiofiles
+        import aiofiles
         conn=pool.get_connection()
         loop=asyncio.get_event_loop()
         fs=[lineswithpattern_patternlist_async(conn,precompiledsql,filelist[i], listoffour) for i in range(len(filelist))]

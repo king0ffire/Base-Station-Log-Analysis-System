@@ -19,11 +19,12 @@ type PythonStatusManager[useridtype comparable, fileidtype comparable] interface
 }
 
 type PythonTaskStatus[fileidtype comparable] struct {
-	Calltype util.Calltype //"cmd", "rpc"
-	Task     util.Task
-	State    util.State // idle, running
-	Cmd      *exec.Cmd
-	Uid      fileidtype
+	Calltype    util.Calltype //"cmd", "rpc"
+	Task        util.Task
+	State       util.State // idle, running
+	Cmd         *exec.Cmd
+	Uid         fileidtype
+	Createdtime string
 }
 
 type PythonCmdStatusManager[fileidtype comparable] struct {

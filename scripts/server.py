@@ -130,7 +130,7 @@ def processfiledbg(clientsocket:socket.socket,dbconn,filemeta,cachelocation):
         message=json.dumps({"useruid":filemeta["useruid"],"fileuid":filemeta["fileuid"],"function":"dbg","state":"success"})
     except Exception as e:
         message=json.dumps({"useruid":filemeta["useruid"],"fileuid":filemeta["fileuid"],"function":"dbg","state":"error","error":str(e)})
-        logger.error(f"{filemeta["fileuid"]}:dbg analysis error:{str(e)}")
+        logger.error(f"{filemeta['fileuid']}:dbg analysis error:{str(e)}")
     clientsocket.sendall(message.encode("utf-8"))
 
 def parsejsondata(client_socket,jsondata,conn,cachelocation):
@@ -176,7 +176,7 @@ def startserver(cachelocation):
                         jsondata=json.loads(jsondump)
                         parsejsondata(client_socket,jsondata,conn,cachelocation)
                         end_time=time.time()
-                        logger.debug(f"file {jsondata["fileuid"]} cost:{(end_time-starttime):.4f}")
+                        logger.debug(f"file {jsondata['fileuid']} cost:{(end_time-starttime):.4f}")
                     logger.debug(f"remaining buffer before next packet:{repr(buffer)}")
             except Exception as e:
                 logger.warning(f"connection lost:{e}")
