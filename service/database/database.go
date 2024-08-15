@@ -63,9 +63,8 @@ func init() {
 }
 func DeleteUserinfo[useridtype comparable](userid useridtype) {
 	var err error
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancelfunc()
-	_, err = db.ExecContext(ctx, "delete from userinfo where userid = ?", userid)
+
+	_, err = db.Exec("delete from userinfo where userid = ?", userid)
 	if err != nil {
 		fmt.Printf("Error %s when delete userinfo\n", err)
 		return
@@ -73,9 +72,8 @@ func DeleteUserinfo[useridtype comparable](userid useridtype) {
 }
 func AddUserinfo[useridtype comparable](userid useridtype) {
 	var err error
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancelfunc()
-	_, err = db.ExecContext(ctx, "insert into userinfo values (null,?)", userid)
+
+	_, err = db.Exec("insert into userinfo values (null,?)", userid)
 	if err != nil {
 		fmt.Printf("Error %s when add userinfo\n", err)
 		return
@@ -84,9 +82,8 @@ func AddUserinfo[useridtype comparable](userid useridtype) {
 }
 func DeleteFileinfo[fileidtype comparable](fileid fileidtype) {
 	var err error
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancelfunc()
-	_, err = db.ExecContext(ctx, "delete from fileinfo where fileid = ?", fileid)
+
+	_, err = db.Exec("delete from fileinfo where fileid = ?", fileid)
 	if err != nil {
 		fmt.Printf("Error %s when delete fileinfo\n", err)
 		return
@@ -95,21 +92,19 @@ func DeleteFileinfo[fileidtype comparable](fileid fileidtype) {
 
 func Deletedbgitemstable[fileidtype comparable](fileid fileidtype) {
 	var err error
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancelfunc()
-	_, err = db.ExecContext(ctx, "drop table dbgitems_"+fmt.Sprintf("%v", fileid))
+
+	_, err = db.Exec("drop table dbgitems_" + fmt.Sprintf("%v", fileid))
 	if err != nil {
-		fmt.Printf("Error %s when delete dbgitems_%s\n", err, fmt.Sprintf("%v", fileid))
+		fmt.Printf("Error %s, when delete dbgitems_%s\n", err, fmt.Sprintf("%v", fileid))
 		return
 	}
 }
 func AddFileinfo[fileidtype comparable, useridtype comparable](fileid fileidtype, userid useridtype) {
 	var err error
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancelfunc()
-	_, err = db.ExecContext(ctx, "insert into fileinfo values (null,?,?)", fileid, userid)
+
+	_, err = db.Exec("insert into fileinfo values (null,?,?)", fileid, userid)
 	if err != nil {
-		fmt.Printf("Error %s when add fileinfo\n", err)
+		fmt.Printf("Error %s when %s add fileinfo %s\n", err, fmt.Sprintf("%v", userid), fmt.Sprintf("%v", fileid))
 		return
 	}
 	fmt.Println("Added fileid:", fileid)

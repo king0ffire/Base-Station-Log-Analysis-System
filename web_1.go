@@ -7,15 +7,18 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
-	"webapp/util"
-	"webapp/util/cookie"
-	"webapp/util/database"
-	"webapp/util/file"
-	"webapp/util/pythonmanager"
-	"webapp/util/session"
-	"webapp/util/socket"
+	"time"
+	"webapp/service"
+	"webapp/service/cookie"
+	"webapp/service/database"
+	"webapp/service/file"
+	"webapp/service/pythonmanager"
+	"webapp/service/session"
+	"webapp/service/socket"
 
 	"github.com/gorilla/websocket"
 )
@@ -25,13 +28,37 @@ const localport = ":9090"
 
 var sessionmanager = session.NewManager[string, string, *websocket.Conn]()
 var cachequeue = &file.FileCacheQueue[string, string]{}
-var pythonprocessesmanager = pythonmanager.NewManager[string]()
+var pythonstatusmanager *pythonmanager.PythonServiceStatusManager[string, string]
+
+func init() {
+
+	// var pythonprocessesmanager = pythonmanager.NewManager[string]()
+	/*
+		cmd := exec.Command("python", "./scripts/server.py", uploadpath)
+		outpipe, err := cmd.StdoutPipe()
+		if err != nil {
+			fmt.Println("error:", err)
+		}
+		cmd.Stderr = os.Stderr
+		cmd.Stdout = os.Stdout
+		err = cmd.Start()
+		if err != nil {
+			fmt.Println("start python error:", err)
+		}
+		scanner := bufio.NewScanner(outpipe)
+		scanner.Scan()
+		fmt.Println("python output:", scanner.Text())
+	*/
+	pythonstatusmanager = pythonmanager.NewServerManager[string, string]()
+
+	socket.NewPythonServerListener(pythonstatusmanager.PythonServer.Socket, service.ConstructJSONHandle(sessionmanager, pythonstatusmanager))
+}
 
 func indexentry(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		cook := cookie.CookieGet(r)
 		if cook.IsNew {
-			util.NewUserintoMemory(w, r, cook, sessionmanager)
+			service.NewUserintoMemory(w, r, cook, sessionmanager)
 		} else {
 			fmt.Println("cookie exist on brower")
 			userid, ok := cookie.CookieGet(r).Values["id"].(string)
@@ -42,7 +69,7 @@ func indexentry(w http.ResponseWriter, r *http.Request) {
 			_, ok = sessionmanager.Get(userid)
 			if !ok {
 				fmt.Println("but session expired on backend")
-				util.NewUserintoMemory(w, r, cook, sessionmanager)
+				service.NewUserintoMemory(w, r, cook, sessionmanager)
 			}
 		}
 		t, err := template.ParseFiles("./templates/home/index.html")
@@ -73,13 +100,13 @@ func upload(w http.ResponseWriter, r *http.Request) {
 			fmt.Println("userid not found")
 			return
 		}
-		fileuid, created := util.MultiPartFileSaver(uploadpath, &multipartfile, multiparthandler)
+		fileuid, created := service.MultiPartFileSaver(uploadpath, &multipartfile, multiparthandler)
 		if !created {
 			fmt.Println("created failed:", created)
 			return
 		}
-		util.OldFileCollection(sessionmanager, pythonprocessesmanager, cachequeue, fileuid, uploadpath, userid)
-		util.AddFileToMemory(sessionmanager, pythonprocessesmanager, cachequeue, fileuid, multiparthandler.Filename, 0, 0, userid)
+		service.OldFileCollection(sessionmanager, pythonstatusmanager, cachequeue, fileuid, uploadpath, userid)
+		service.AddFileToMemory(sessionmanager, pythonstatusmanager, cachequeue, fileuid, multiparthandler.Filename, 0, 0, userid)
 		/*
 			existuid, ok := session.SessionAddFileHistory(w, r, uid, multiparthandler.Filename)
 			if !ok {
@@ -88,7 +115,7 @@ func upload(w http.ResponseWriter, r *http.Request) {
 				util.ParseFile(uid, uploadpath)
 			}*/
 		//同用户内允许重名文件
-		util.ParseFile(sessionmanager, pythonprocessesmanager, cachequeue, fileuid, uploadpath, userid)
+		service.ParsedbgFile(sessionmanager, pythonstatusmanager, cachequeue, fileuid, uploadpath, userid)
 
 		http.Redirect(w, r, "/uploadedfiles?filename="+multiparthandler.Filename, http.StatusSeeOther)
 		fmt.Println("redirect success")
@@ -132,7 +159,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func sockethandler_withfilter(w http.ResponseWriter, r *http.Request) {
+func sockethandler_withfilter(w http.ResponseWriter, r *http.Request) { //初始话一个websocket connection
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
@@ -164,10 +191,7 @@ func sockethandler_withfilter(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("socket not found")
 		return
 	}
-	_, filelist := usersession.FileStatusManager.KeyAndValue()
-	socketlist := []*socket.SocketStatus[*websocket.Conn]{currentsocket}
-	fmt.Println("filelist length", len(filelist))
-	util.AnnounceAllSocketsInUser(filelist, socketlist)
+	service.AnnounceAllSocketsInUser(usersession)
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
@@ -175,16 +199,20 @@ func sockethandler_withfilter(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if string(message) == "clearcache" {
-			clearcache(w, r)
+			cleardata(w, r)
 			currentsocket.Lock.Lock()
 			conn.WriteJSON([]interface{}{})
 			currentsocket.Lock.Unlock()
 			fmt.Println("Empty Json returned")
+		} else {
+			idstobeparsed := string(message)
+			fmt.Println("start to parse ids:", idstobeparsed)
+			service.ParseidsFilebyCmd(sessionmanager, pythonstatusmanager, cachequeue, idstobeparsed, uploadpath, userid)
 		}
 	}
 }
 
-func clearcache(w http.ResponseWriter, r *http.Request) {
+func cleardata(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("clear cache")
 	userid, ok := cookie.CookieGet(r).Values["id"].(string)
 	if !ok {
@@ -198,7 +226,7 @@ func clearcache(w http.ResponseWriter, r *http.Request) {
 	}
 	_, userholdingfiles := usersession.FileStatusManager.KeyAndValue()
 	for _, v := range userholdingfiles {
-		util.ForceStopAndDeleteFile(v.Uid, uploadpath, usersession, pythonprocessesmanager, cachequeue)
+		service.ForceStopAndDeleteFile(v.Uid, uploadpath, usersession, pythonstatusmanager, cachequeue)
 		fmt.Println("cleared cache:", v.Uid)
 	}
 }
@@ -238,7 +266,7 @@ func showresults_dbg(w http.ResponseWriter, r *http.Request) {
 	if fileid == "" {
 		csvpath = ""
 	}
-	util.Renderbydbgfile(w, r, csvpath, csvpath_acc, currentfilestatus.Filename)
+	service.Renderbydbgfile(w, r, csvpath, csvpath_acc, currentfilestatus.Filename)
 }
 
 func showresults_ids(w http.ResponseWriter, r *http.Request) {
@@ -263,7 +291,7 @@ func showresults_ids(w http.ResponseWriter, r *http.Request) {
 	if fileid == "" {
 		csvpath = ""
 	}
-	util.Renderbyidsfile(w, r, csvpath, filestatus.Filename)
+	service.Renderbyidsfile(w, r, csvpath, filestatus.Filename)
 }
 
 func showdbgitembyeventname(w http.ResponseWriter, r *http.Request) {
@@ -309,6 +337,47 @@ func showdbgitembyeventname(w http.ResponseWriter, r *http.Request) {
 		conn.WriteJSON(filtereddbgitems)
 	}
 }
+
+func concurrencyTest(w http.ResponseWriter, r *http.Request) {
+	userid, ok := cookie.CookieGet(r).Values["id"].(string)
+	if !ok {
+		fmt.Println("userid not found")
+		return
+	}
+	fileuid := strconv.FormatInt(time.Now().UnixNano(), 10)
+	_, err := os.Stat(filepath.Join(uploadpath, fileuid+".tar.gz"))
+	fmt.Println("newfile path:", filepath.Join(uploadpath, fileuid+".tar.gz"))
+	if err != nil {
+		cachefile, err := os.Create(filepath.Join(uploadpath, fileuid+".tar.gz"))
+		if err != nil {
+			fmt.Println("create new fail:", err)
+		}
+		defer cachefile.Close()
+		file, err := os.Open("E:\\Log_20240618_092153.tar.gz")
+		if err != nil {
+			fmt.Println("open file fail:", err)
+		}
+		_, err = cachefile.ReadFrom(file)
+		if err != nil {
+			fmt.Println("cache fail:", err)
+		}
+		service.OldFileCollection(sessionmanager, pythonstatusmanager, cachequeue, fileuid, uploadpath, userid)
+		service.AddFileToMemory(sessionmanager, pythonstatusmanager, cachequeue, fileuid, "Log_20240618_092153.tar.gz", 0, 0, userid)
+		/*
+			existuid, ok := session.SessionAddFileHistory(w, r, uid, multiparthandler.Filename)
+			if !ok {
+				fmt.Println("file exist, use old:", existuid)
+			} else {
+				util.ParseFile(uid, uploadpath)
+			}*/
+		//同用户内允许重名文件
+		service.ParsedbgFile(sessionmanager, pythonstatusmanager, cachequeue, fileuid, uploadpath, userid)
+
+		http.Redirect(w, r, "/uploadedfiles?filename="+"Log_20240618_092153.tar.gz", http.StatusSeeOther)
+		fmt.Println("redirect success")
+	}
+}
+
 func main() {
 	gob.Register(map[string]string{})
 	http.HandleFunc("/cache/", func(w http.ResponseWriter, r *http.Request) {
@@ -325,12 +394,14 @@ func main() {
 	http.HandleFunc("/results/dbg", showresults_dbg)
 	http.HandleFunc("/results/ids", showresults_ids)
 	http.HandleFunc("/uploadedfiles", uploadedfiles)
-	http.HandleFunc("/clearcache", clearcache)
+	http.HandleFunc("/clearcache", cleardata)
 	http.HandleFunc("/ws", sockethandler_withfilter)
 	http.HandleFunc("/dbgitembyeventfilter_ws", showdbgitembyeventname)
+	http.HandleFunc("/concurrencytest", concurrencyTest)
 
 	err := http.ListenAndServe(localport, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
+	fmt.Println("server start")
 }

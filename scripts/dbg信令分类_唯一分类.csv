@@ -1,0 +1,51 @@
+Event Name,Category
+ue access processor start,UE接入
+rrc connection request,UE接入
+rrc connection reject,UE接入
+rrc connection setup,UE接入
+rrc connection setup complete,UE接入
+initial ue message,UE接入
+initial context setup request,UE接入
+ue capability enquiry,UE接入
+ue capability information,UE接入
+ue radio access capability info,UE接入
+security mode command,UE接入
+security mode complete,UE接入
+rrc connection reconfiguration,UE接入
+rrc connection reconfiguration complete,UE接入
+rrc connection reestablishment request,UE接入
+rrc connection reestablishment,UE接入
+rrc connection reestablishement complete,UE接入
+initial context setup response,UE接入
+initial context setup failure,UE接入
+ue reestablishment processor start,UE接入
+ue reestablishment processor end,UE接入
+ue context release request,UE接入
+ue context release command,UE接入
+rrc connection release,UE接入
+ue context release complete,UE接入
+ue release processor start,UE接入
+ue release processor end,UE接入
+ue access processor end,UE接入
+s1 source handover processor start,S1切换出
+A1 measurement report,S1切换出
+A2 measurement report,S1切换出
+A3 measurement report,S1切换出
+A5 measurement report,S1切换出
+B2_UTRA measurement report,S1切换出
+CGI measurement report,S1切换出
+handover required,S1切换出
+handover command,S1切换出
+rrc connection reconfiguration,S1切换出
+enb status transfor,S1切换出
+ue context release command,S1切换出
+ue context release complete,S1切换出
+s1 source handover processor end,S1切换出
+s1 target handover processor start,S1切换入
+handover request,S1切换入
+handover request ack,S1切换入
+handover failure,S1切换入
+mme status transfor,S1切换入
+handover notify,S1切换入
+rrc connection reconfiguration complete,S1切换入
+s1 target handover processor end,S1切换入

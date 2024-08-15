@@ -1,29 +1,59 @@
+
 import mysql.connector
+
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-mydb=None
-def init(fileuid):
-    global mydb
-    mydb = mysql.connector.connect(host="localhost", user="root", password="root123",port="3306")
+def init():
+        global conn
+        conn = mysql.connector.connect(host="127.0.0.1", user="root", password="root123",port="3306")
+        logger.info("start sql")
+        #cursor.execute("drop database if exists webapp")
+        #cursor.execute("CREATE DATABASE webapp")
+        conn.cursor().execute("use webapp")
+        logger.info("connection created")
 
-    cursor = mydb.cursor()
+def initpool():
+    global pool
     logger.info("start sql")
-    #cursor.execute("drop database if exists webapp")
-    #cursor.execute("CREATE DATABASE webapp")
-    cursor.execute("use webapp")
+    pool=mysql.connector.pooling.MySQLConnectionPool(pool_name="mypool",pool_size=6,host="127.0.0.1",user="root",password="root123",port="3306",database="webapp")
     logger.info("connection created")
-    createtable(fileuid)
-    mydb.commit()
-
 def createtable(fileuid):
-    global mydb
-    mydb.cursor().execute(
-        "CREATE TABLE dbgitems_%s (id int auto_increment primary key, time VARCHAR(255), errortype VARCHAR(255), \
-                   device VARCHAR(255), info VARCHAR(511), event VARCHAR(255), fileid VARCHAR(255), \
-                       foreign key (fileid) references fileinfo(fileid) on delete cascade )" % fileuid
-    )
+        try:
+            conn.cursor().execute(
+                "CREATE TABLE dbgitems_%s (id int auto_increment primary key, time VARCHAR(100), errortype VARCHAR(100), \
+                        device VARCHAR(255), info VARCHAR(511), event VARCHAR(255), fileid VARCHAR(100), \
+                            foreign key (fileid) references fileinfo(fileid))" % fileuid
+            )
+            logger.info("file table created")
+        except mysql.connector.errors.ProgrammingError:
+            pass
+def createtablebypool(fileuid):
+    try:
+        with pool.get_connection() as conn:
+            conn.cursor().execute(
+                "CREATE TABLE dbgitems_%s (id int auto_increment primary key, time VARCHAR(100), errortype VARCHAR(100), \
+                        device VARCHAR(255), info VARCHAR(511), event VARCHAR(255), fileid VARCHAR(100), \
+                            foreign key (fileid) references fileinfo(fileid))" % fileuid
+            )
+            conn.commit()
+            logger.info("file table created")
+    except mysql.connector.errors.ProgrammingError:
+        pass
+        
+
+def createsimpletable(fileuid):
+        try:
+            with pool.get_connection() as conn:
+                conn.cursor().execute("CREATE TABLE dbgitems_%s (info VARCHAR(1000),event name)" % fileuid)
+                conn.commit()
+                logger.info("file table created")
+        except mysql.connector.errors.ProgrammingError:
+            pass
+
+def batch_insert(sqlsentence, batch):
+    cursor=conn.cursor()
+    cursor.executemany(sqlsentence,batch)
     
-    logger.info("file table created")

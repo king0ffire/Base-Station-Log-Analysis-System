@@ -21,7 +21,7 @@ def mapget(map, key):
 
 
 
-debug = False
+debug = True
 
 #暂时不用
 '''
@@ -110,7 +110,7 @@ def sctpanalysis(csvfile_id,csvwriter_id, sctp_file_list,cache_path,filter1,filt
         print("multithread success")
     logger.info("sctp finished")
 
-
+@profile
 # mode 0 is single thread， mode 1 is multithread
 def run(filelocation, mode=0):
     filter1 = "s1ap.MME_UE_S1AP_ID"
@@ -139,7 +139,7 @@ def run(filelocation, mode=0):
     logger.info("Current Working Directory: %s", os.getcwd())
     logger.info("Current File Dirctory: %s", os.path.abspath("."))
     if not debug:
-        os.remove(filelocation)
+
         logger.info("remove tar file")
 
     tracelocation = os.path.join(extracteddir, "logs", "trace.tgz")

@@ -1,5 +1,5 @@
 // SocketStatus map 可以接受任意类型的socket uid，目前直接使用conn的地址
-package socket
+package websocketmanager
 
 import (
 	"sync"

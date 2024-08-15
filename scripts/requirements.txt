@@ -2,3 +2,8 @@ pyshark
 pandas
 openpyxl
 mysql-connector-python
+numba
+line_profiler
+pyahocorasick
+regex
+aiofiles

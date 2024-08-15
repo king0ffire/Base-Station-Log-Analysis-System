@@ -2,8 +2,13 @@
 package file
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
+	"time"
+	"webapp/service/util"
 )
 
 type FileCacheQueue[fileidtype comparable, useruidtype comparable] struct {
@@ -51,12 +56,19 @@ func (m *FileCacheQueue[fileidtype, useruidtype]) Delete(uid fileidtype) {
 	}
 }
 
+type AnalysisStatus struct {
+	State        util.State
+	Maxvalue     int
+	Currentvalue int
+	Lock         sync.Mutex
+}
+
 type FileStatus[fileidtype comparable, useruidtype comparable] struct {
-	Filename string
-	Uid      fileidtype //newlocation
-	Max      int
-	Current  int
-	Useruid  useruidtype
+	Filename   string
+	Uid        fileidtype //newlocation
+	Useruid    useruidtype
+	Dbgstatus  *AnalysisStatus //no schedule, created, running, finished, failed
+	Sctpstatus *AnalysisStatus
 }
 
 type FileStatusManager[Keytype comparable, useruidtype comparable] struct {
@@ -76,42 +88,42 @@ func FileNameFilter[fileidtype comparable, useruidtype comparable](files []*File
 func NewManager[Keytype comparable, useruidtype comparable]() *FileStatusManager[Keytype, useruidtype] {
 	return &FileStatusManager[Keytype, useruidtype]{Filestatus: make(map[Keytype]*FileStatus[Keytype, useruidtype])}
 }
-
-func (m *FileStatusManager[Keytype, useruidtype]) Add(uid Keytype, filename string, current int, max int, userid useruidtype) {
+func NewFileStatus[fileidtype comparable, useruidtype comparable]() *FileStatus[fileidtype, useruidtype] {
+	return &FileStatus[fileidtype, useruidtype]{Dbgstatus: &AnalysisStatus{State: util.Noschedule}, Sctpstatus: &AnalysisStatus{State: util.Noschedule}}
+}
+func (m *FileStatusManager[fileidtype, useruidtype]) Add(fileuid fileidtype, filestatus *FileStatus[fileidtype, useruidtype]) {
 	m.Lock.Lock()
-	m.Filestatus[uid] = &FileStatus[Keytype, useruidtype]{Filename: filename, Uid: uid, Current: current, Max: max, Useruid: userid}
+	m.Filestatus[fileuid] = filestatus
 	m.Lock.Unlock()
 }
 
-func (m *FileStatusManager[Keytype, useruidtype]) Delete(uid Keytype) {
+func (m *FileStatusManager[fileidtype, useruidtype]) Delete(fileuid fileidtype) {
 	m.Lock.Lock()
-	delete(m.Filestatus, uid)
+	delete(m.Filestatus, fileuid)
 	m.Lock.Unlock()
 }
 
-func (m *FileStatusManager[Keytype, useruidtype]) Get(uid Keytype) (*FileStatus[Keytype, useruidtype], bool) {
+func (m *FileStatusManager[fileidtype, useruidtype]) Get(fileuid fileidtype) (*FileStatus[fileidtype, useruidtype], bool) {
 	m.Lock.RLock()
-	v, ok := m.Filestatus[uid]
+	v, ok := m.Filestatus[fileuid]
 	m.Lock.RUnlock()
 	return v, ok
 }
 
-func (m *FileStatusManager[Keytype, useruidtype]) Set(uid Keytype, current int, max int, useruid useruidtype) bool {
-	oldvalue, ok := m.Get(uid)
+func (m *FileStatusManager[fileidtype, useruidtype]) Set(fileuid fileidtype, obj *FileStatus[fileidtype, useruidtype]) bool {
+	_, ok := m.Get(fileuid)
 	if ok {
 		m.Lock.Lock()
-		oldvalue.Current = current
-		oldvalue.Max = max
-		oldvalue.Useruid = useruid
+		m.Filestatus[fileuid] = obj
 		m.Lock.Unlock()
 		return true
 	}
 	return false
 }
 
-func (m *FileStatusManager[Keytype, useruidtype]) KeyAndValue() ([]Keytype, []*FileStatus[Keytype, useruidtype]) {
-	keys := []Keytype{}
-	values := []*FileStatus[Keytype, useruidtype]{}
+func (m *FileStatusManager[fileidtype, useruidtype]) KeyAndValue() ([]fileidtype, []*FileStatus[fileidtype, useruidtype]) {
+	keys := []fileidtype{}
+	values := []*FileStatus[fileidtype, useruidtype]{}
 	m.Lock.RLock()
 	for k, v := range m.Filestatus {
 		keys = append(keys, k)
@@ -121,12 +133,27 @@ func (m *FileStatusManager[Keytype, useruidtype]) KeyAndValue() ([]Keytype, []*F
 	return keys, values
 }
 
-func (m *FileStatusManager[Keytype, useruidtype]) FilterGetByFilename(filter string) []*FileStatus[Keytype, useruidtype] {
-	filteredfilestatuslist := []*FileStatus[Keytype, useruidtype]{}
+func (m *FileStatusManager[fileidtype, useruidtype]) FilterGetByFilename(filter string) []*FileStatus[fileidtype, useruidtype] {
+	filteredfilestatuslist := []*FileStatus[fileidtype, useruidtype]{}
 	for _, v := range m.Filestatus {
 		if strings.Contains(v.Filename, filter) {
 			filteredfilestatuslist = append(filteredfilestatuslist, v)
 		}
 	}
 	return filteredfilestatuslist
+}
+
+func DeleteFileFromLocal(uploadpath string, uid string) error {
+	err := os.RemoveAll(filepath.Join(uploadpath, uid))
+	if err != nil {
+		go func() {
+			time.Sleep(time.Second * 1)
+			err2 := os.RemoveAll(filepath.Join(uploadpath, uid))
+			fmt.Println("retried delete file")
+			if err2 != nil {
+				fmt.Println("retry error:", err2)
+			}
+		}()
+	}
+	return err
 }

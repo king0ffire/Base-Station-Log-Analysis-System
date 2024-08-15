@@ -2,29 +2,29 @@ package session
 
 import (
 	"sync"
-	"webapp/util/file"
-	"webapp/util/socket"
+	"webapp/service/file"
+	"webapp/service/websocketmanager"
 
 	"github.com/gorilla/sessions"
 )
 
-type SessionStatus[sessionidtype comparable, fileidtype comparable, socketidtype socket.Socketidinterface] struct {
+type SessionStatus[sessionidtype comparable, fileidtype comparable, socketidtype websocketmanager.Socketidinterface] struct {
 	FileStatusManager   *file.FileStatusManager[fileidtype, sessionidtype]
-	SocketstatusManager *socket.SocketStatusManager[socketidtype]
+	SocketstatusManager *websocketmanager.SocketStatusManager[socketidtype]
 }
 
-type SessionStatusManager[sessionidtype comparable, fileidtype comparable, socketidtype socket.Socketidinterface] struct {
+type SessionStatusManager[sessionidtype comparable, fileidtype comparable, socketidtype websocketmanager.Socketidinterface] struct {
 	SessionStatus map[sessionidtype]*SessionStatus[sessionidtype, fileidtype, socketidtype]
 	Lock          sync.RWMutex
 }
 
-func NewManager[sessionidtype comparable, fileidtype comparable, socketidtype socket.Socketidinterface]() *SessionStatusManager[sessionidtype, fileidtype, socketidtype] {
+func NewManager[sessionidtype comparable, fileidtype comparable, socketidtype websocketmanager.Socketidinterface]() *SessionStatusManager[sessionidtype, fileidtype, socketidtype] {
 	return &SessionStatusManager[sessionidtype, fileidtype, socketidtype]{SessionStatus: make(map[sessionidtype]*SessionStatus[sessionidtype, fileidtype, socketidtype])}
 }
 
 func (m *SessionStatusManager[sessionidtype, fileidtype, socketidtype]) Add(key sessionidtype) {
 	m.Lock.Lock()
-	m.SessionStatus[key] = &SessionStatus[sessionidtype, fileidtype, socketidtype]{FileStatusManager: file.NewManager[fileidtype, sessionidtype](), SocketstatusManager: socket.NewManager[socketidtype]()}
+	m.SessionStatus[key] = &SessionStatus[sessionidtype, fileidtype, socketidtype]{FileStatusManager: file.NewManager[fileidtype, sessionidtype](), SocketstatusManager: websocketmanager.NewManager[socketidtype]()}
 	m.Lock.Unlock()
 }
 func (m *SessionStatusManager[sessionidtype, fileidtype, socketidtype]) Delete(key sessionidtype) {
@@ -33,9 +33,9 @@ func (m *SessionStatusManager[sessionidtype, fileidtype, socketidtype]) Delete(k
 	m.Lock.Unlock()
 }
 
-func (m *SessionStatusManager[sessionidtype, fileidtype, socketidtype]) AddFile(key sessionidtype, fileuid fileidtype, filename string, current int, max int, userid sessionidtype) {
+func (m *SessionStatusManager[sessionidtype, fileidtype, socketidtype]) AddFile(sessionid sessionidtype, fileuid fileidtype, filestatus *file.FileStatus[fileidtype, sessionidtype]) {
 	m.Lock.RLock()
-	m.SessionStatus[key].FileStatusManager.Add(fileuid, filename, current, max, userid)
+	m.SessionStatus[sessionid].FileStatusManager.Add(fileuid, filestatus)
 	m.Lock.RUnlock()
 }
 
@@ -57,7 +57,7 @@ func (m *SessionStatusManager[sessionidtype, fileidtype, socketidtype]) FileKeyA
 	return m.SessionStatus[key].FileStatusManager.KeyAndValue()
 }
 
-func (m *SessionStatusManager[sessionidtype, fileidtype, socketidtype]) SocketKeyAndValue(key sessionidtype) ([]socketidtype, []*socket.SocketStatus[socketidtype]) {
+func (m *SessionStatusManager[sessionidtype, fileidtype, socketidtype]) SocketKeyAndValue(key sessionidtype) ([]socketidtype, []*websocketmanager.SocketStatus[socketidtype]) {
 	m.Lock.RLock()
 	defer m.Lock.RUnlock()
 	return m.SessionStatus[key].SocketstatusManager.KeyAndValue()

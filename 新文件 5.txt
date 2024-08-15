@@ -1,0 +1,2 @@
+filestatus: 文件的从属，文件的地址，文件的分析状态
+PythonProcessStatus： 一条python命令及其是否在运行
