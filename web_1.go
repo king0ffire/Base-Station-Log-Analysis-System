@@ -18,13 +18,13 @@ import (
 	"webapp/service/file"
 	"webapp/service/pythonmanager"
 	"webapp/service/session"
-	"webapp/service/socket"
+	"webapp/service/util"
 
 	"github.com/gorilla/websocket"
 )
 
-const uploadpath = "./cache"
-const localport = ":9090"
+var uploadpath = util.ConfigMap["file"]["cache_path"]
+var localport = fmt.Sprintf(":%s", util.ConfigMap["webapp"]["port"])
 
 var sessionmanager = session.NewManager[string, string, *websocket.Conn]()
 var cachequeue = &file.FileCacheQueue[string, string]{}
@@ -51,7 +51,7 @@ func init() {
 	*/
 	pythonstatusmanager = pythonmanager.NewServerManager[string, string]()
 
-	socket.NewPythonServerListener(pythonstatusmanager.PythonServer.Socket, service.ConstructJSONHandle(sessionmanager, pythonstatusmanager))
+	(*pythonstatusmanager.PythonServer).NewPythonServerListener(service.ConstructJSONHandle(sessionmanager, pythonstatusmanager))
 }
 
 func indexentry(w http.ResponseWriter, r *http.Request) {
@@ -226,7 +226,7 @@ func cleardata(w http.ResponseWriter, r *http.Request) {
 	}
 	_, userholdingfiles := usersession.FileStatusManager.KeyAndValue()
 	for _, v := range userholdingfiles {
-		service.ForceStopAndDeleteFile(v.Uid, uploadpath, usersession, pythonstatusmanager, cachequeue)
+		service.ForceStopAndDeleteFile(v.Uid, userid, uploadpath, usersession, pythonstatusmanager, cachequeue)
 		fmt.Println("cleared cache:", v.Uid)
 	}
 }
@@ -353,7 +353,7 @@ func concurrencyTest(w http.ResponseWriter, r *http.Request) {
 			fmt.Println("create new fail:", err)
 		}
 		defer cachefile.Close()
-		file, err := os.Open("E:\\Log_20240618_092153.tar.gz")
+		file, err := os.Open("./example/Log_20240618_092153.tar.gz")
 		if err != nil {
 			fmt.Println("open file fail:", err)
 		}

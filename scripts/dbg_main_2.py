@@ -14,6 +14,10 @@ import glob
 import sys
 import logging
 from line_profiler import profile
+import configparser
+
+config=configparser.ConfigParser()
+config.read("config.ini")
 
 @profile
 def run(filelocation, mode=0):
@@ -67,9 +71,9 @@ def run(filelocation, mode=0):
     if not os.path.exists(cache_path):
         os.makedirs(cache_path)
 
-    fourEqualPattern = r"====[^\[]*"
+    fourEqualPattern = config["python"]["fourEqualPattern"]
     #fourEqualPattern = r"====.*?\["
-    fiveDashPattern = r"-----[^-\[\n]+"
+    fiveDashPattern = config["python"]["fiveDashPattern"]
     #pattern1 = r"[X2AP]:Sending UE CONTEXT RELEASE"
     #pattern2 = r"Received HANDOVER REQUEST"
 

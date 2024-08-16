@@ -1,4 +1,4 @@
-package service
+package topmanager
 
 import (
 	"bufio"
@@ -38,16 +38,17 @@ func OldFileCollection[sessionidtype comparable, fileidtype comparable, socketid
 		if !ok {
 			fmt.Println("didnot find the user owning file to be deleted")
 		}
-		ForceStopAndDeleteFile(fileuid, uploadpath, usersession, pythonmanager, cachequeue)
+		ForceStopAndDeleteFile(fileuid, userid, uploadpath, usersession, pythonmanager, cachequeue)
 	}
 }
 
-func ForceStopAndDeleteFile[sessionidtype comparable, fileidtype comparable, socketidtype websocketmanager.Socketidinterface](fileid fileidtype, uploadpath string,
+func ForceStopAndDeleteFile[sessionidtype comparable, fileidtype comparable, socketidtype websocketmanager.Socketidinterface](
+	fileid fileidtype, userid sessionidtype, uploadpath string,
 	usersession *session.SessionStatus[sessionidtype, fileidtype, socketidtype],
 	pythonmanager pythonmanager.PythonStatusManager[sessionidtype, fileidtype],
 	cachequeue *file.FileCacheQueue[fileidtype, sessionidtype]) {
 
-	pythonmanager.Delete(fileid)
+	pythonmanager.Delete(userid, fileid)
 	cachequeue.Delete(fileid)
 	database.DeleteFileinfo(fileid)
 	database.Deletedbgitemstable(fileid)
@@ -191,7 +192,7 @@ func ParsedbgFile[sessionidtype comparable, fileidtype comparable, socketidtype 
 	}
 
 	stringuid := fmt.Sprintf("%v", fileuid)
-	pythonstatusmanager.Add(fileuid, filepath.Join(uploadpath, stringuid+".tar.gz")) //三个命令一起初始化了
+	pythonstatusmanager.Add(userid, fileuid, filepath.Join(uploadpath, stringuid+".tar.gz")) //三个命令一起初始化了
 	taskstatus, _ := pythonstatusmanager.Get(fileuid)
 	dbgtaskstatus := taskstatus[util.Dbg]
 
@@ -201,7 +202,7 @@ func ParsedbgFile[sessionidtype comparable, fileidtype comparable, socketidtype 
 
 		currentfilestatus.Dbgstatus.State = util.Created
 		usersession.FileStatusManager.Set(fileuid, currentfilestatus)
-		pythonstatusmanager.Start(currentfilestatus, util.Dbg)
+		pythonstatusmanager.Start(userid, fileuid, util.Dbg)
 		dbgtaskstatus.State = util.Running
 		currentfilestatus.Dbgstatus.State = util.Running
 		AnnounceAllSocketsInUser(usersession)
@@ -227,7 +228,7 @@ func ParsedbgFile[sessionidtype comparable, fileidtype comparable, socketidtype 
 	} else if dbgtaskstatus.Calltype == util.Rpc {
 		dbgtaskstatus.State = util.Running
 		currentfilestatus.Dbgstatus.State = util.Created
-		pythonstatusmanager.Start(currentfilestatus, util.Dbg)
+		pythonstatusmanager.Start(userid, fileuid, util.Dbg)
 		currentfilestatus.Dbgstatus.State = util.Running
 		AnnounceAllSocketsInUser(usersession)
 	}
@@ -546,7 +547,7 @@ func ConstructJSONHandle[sessionidtype comparable, fileidtype comparable, socket
 			return
 		}
 		if jsondata["state"] == "success" {
-			if jsondata["function"] == "dbg" {
+			if jsondata["function"] == "Dbg" {
 				pythonstatusmanager.SetState(fileuid, util.Dbg, util.Idle)
 				currentfilestatus.Dbgstatus.State = util.Finished
 				usersession.FileStatusManager.Set(fileuid, currentfilestatus)

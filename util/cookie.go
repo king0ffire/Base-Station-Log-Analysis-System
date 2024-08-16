@@ -1,4 +1,4 @@
-package cookie
+package util
 
 import (
 	"encoding/base64"

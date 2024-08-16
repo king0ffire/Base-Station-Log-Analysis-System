@@ -1,11 +1,11 @@
 import csv
+import logging
 import os
 import queue
 import threading
 from line_profiler import profile
-import aiosql
 
-
+logger=logging.getLogger(__name__)
 def mapget(map, key):
     if key in map:
         return map[key]
@@ -226,3 +226,37 @@ class DBWriter:
         self.conn.commit()
         #aiosql.bulkinsertafter(self.conn)
         return self.conn
+
+
+class QueueListener:
+    def __init__(self, queue:queue.Queue, *handlers):
+        self.queue = queue
+        self.handlers = handlers
+        self.thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self):
+        self.thread.start()
+    
+    def _run(self):
+        has_task_done = hasattr(self.queue, 'task_done')
+        while True:
+                args = self.queue.get(True)
+                if args is None:
+                    if has_task_done:
+                        self.queue.task_done()
+                        break
+                for handler in self.handlers:
+                    try:
+                        handler(*args)
+                    except Exception as e:
+                        logger.error(f"Error when running handler: {e}")
+                if has_task_done:
+                    self.queue.task_done()            
+                
+    def close(self):
+        self.queue.put_nowait((None))
+        self.thread.join()
+        self.thread=None
+        
+    def put(self,*args):
+        self.queue.put(args)

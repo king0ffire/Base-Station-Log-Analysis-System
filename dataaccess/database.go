@@ -1,10 +1,11 @@
-package database
+package dataaccess
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
 	"time"
+	"webapp/util"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -23,14 +24,16 @@ type DbgItem struct {
 
 func init() {
 	var err error
-	db, err = sql.Open("mysql", "root:root123@tcp(127.0.0.1:3306)/")
+	db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/",
+		util.ConfigMap["database"]["user"],
+		util.ConfigMap["database"]["password"],
+		util.ConfigMap["database"]["host"],
+		util.ConfigMap["database"]["port"]))
 	if err != nil {
 		fmt.Println("fatal error:", err)
 	}
-
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancelfunc()
-
 	_, err = db.ExecContext(ctx, "drop database if exists webapp")
 	if err != nil {
 		fmt.Printf("Error %s when drop DB\n", err)
@@ -42,11 +45,17 @@ func init() {
 		return
 	}
 
-	_, err = db.ExecContext(ctx, "use webapp")
+	db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s",
+		util.ConfigMap["database"]["user"],
+		util.ConfigMap["database"]["password"],
+		util.ConfigMap["database"]["host"],
+		util.ConfigMap["database"]["port"],
+		util.ConfigMap["database"]["database"]))
 	if err != nil {
-		fmt.Printf("Error %s when use webapp\n", err)
-		return
+		fmt.Println("fatal error:", err)
 	}
+	ctx, cancelfunc = context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancelfunc()
 	_, err = db.ExecContext(ctx,
 		"create table userinfo (id int auto_increment primary key, userid VARCHAR(255), unique(userid))")
 	if err != nil {
@@ -95,7 +104,7 @@ func Deletedbgitemstable[fileidtype comparable](fileid fileidtype) {
 
 	_, err = db.Exec("drop table dbgitems_" + fmt.Sprintf("%v", fileid))
 	if err != nil {
-		fmt.Printf("Error %s, when delete dbgitems_%s\n", err, fmt.Sprintf("%v", fileid))
+		fmt.Printf("Error %s, when drop table dbgitems_%s\n", err, fmt.Sprintf("%v", fileid))
 		return
 	}
 }

@@ -7,6 +7,7 @@ type State int
 const (
 	Running State = iota
 	Idle
+
 	Noschedule
 	Created
 	Finished

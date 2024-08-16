@@ -1,32 +1,35 @@
 from concurrent.futures import ThreadPoolExecutor,as_completed
-import csv
-import os
 import queue
-from sqlite3 import Cursor
 import  mysql.connector
 import logging
+import configparser
 logger = logging.getLogger(__name__)
+config=configparser.ConfigParser()
+config.read("config.ini")
 
-
-class Mypool:
-    def __init__(self,pool_size=1):
+class DatabaseConnectionPool:
+    def __init__(self,pool_size=12):
         self.pool=queue.Queue(pool_size)
         logger.info("start sql")
-        config={ "host":"127.0.0.1", "port":3306, "user":"root", "password":"root123", "database":"webapp"}
+
         with ThreadPoolExecutor() as executor:
-            fs=[executor.submit(mysql.connector.connect,**config) for _ in range(pool_size)]
+            fs=[executor.submit(mysql.connector.connect,**(config["database"])) for _ in range(pool_size)]
             for f in as_completed(fs):
                 self.pool.put(f.result())
         logger.info("connection created")
     def get_connection(self):
-        return self.pool.get(block=False)
+        conn=self.pool.get(block=False)
+        if not conn.is_connected():
+            logger.info("reconnect")
+            conn.reconnect()
+        return conn
     def close_connection(self,conn):
         self.pool.put(conn)
     
 def initpool(loop=None):
     logger.info("start sql")
     global pool
-    pool=Mypool()
+    pool=DatabaseConnectionPool()
     logger.info("connection created")
     
 def createtablebypool(fileuid):
@@ -34,7 +37,7 @@ def createtablebypool(fileuid):
     try:
         conn.cursor().execute(f"DROP TABLE dbgitems_{fileuid}")
     except mysql.connector.errors.ProgrammingError:
-        pass
+        logger.debug(f"file table 'dbgitems_{fileuid}' not exist")
     try:
         conn.cursor().execute(
             f"CREATE TABLE dbgitems_{fileuid} (id int auto_increment primary key, time VARCHAR(100), errortype VARCHAR(100), \
@@ -53,7 +56,7 @@ def createtablebyconn(conn,fileuid):
     try:
         conn.cursor().execute(f"DROP TABLE dbgitems_{fileuid}")
     except mysql.connector.errors.ProgrammingError:
-        pass
+        logger.debug(f"file table 'dbgitems_{fileuid}' not exist")
     try:
         conn.cursor().execute(
             f"CREATE TABLE dbgitems_{fileuid} (id int auto_increment primary key, time VARCHAR(100), errortype VARCHAR(100), \
