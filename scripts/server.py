@@ -13,6 +13,8 @@ import json
 import time
 from line_profiler import profile
 import configparser
+import traceback
+
 
 
 @profile
@@ -61,10 +63,10 @@ def run(filemeta, dbconn, cachelocation, mode=0):
     # countmap = counter_FileListby2patterns(dbg_file_list, fourEqualPattern, fiveDashPattern)
     # db
     # 单独的线程-1
-    logger.info("start dbg")
+    logger.debug("start dbg")
     sqlsentence = f"insert into dbgitems_{fileuid}  values (%s,%s,%s,%s,%s,%s,null)"
     database_csv_location = f"{os.path.abspath(extracteddir)}"
-    sqlbyfile = "load data concurrent infile '{}' ignore into table dbgitems_{} fields terminated by ',' enclosed by '\"' lines terminated by '\\r\\n' (id,time,errortype,device,info,event) ;"
+    sqlbyfile = "load data concurrent infile '{}' ignore into table dbgitems_{} fields terminated by ',' enclosed by '\\\"' lines terminated by '\\r\\n' (id,time,errortype,device,info,event) ;"
     db_writer = DBWriter(
         dbconn,
         fileuid,
@@ -75,7 +77,7 @@ def run(filemeta, dbconn, cachelocation, mode=0):
         db_writer, dbg_file_list, [fourEqualPattern, fiveDashPattern], mode
     )
 
-    logger.info("dbg analisis finished, dbg file wont open again")
+    logger.debug("dbg analisis finished, dbg file wont open again")
 
     # 单独的线程- 2<-1
     from category import get_tagfromcsv
@@ -90,7 +92,7 @@ def run(filemeta, dbconn, cachelocation, mode=0):
     csvwriter_dbg.writerows(dbgfileinfo)
     csvfile_dbg.close()
 
-    logger.info("dbg.csv finished")
+    logger.debug("dbg.csv finished")
 
     listofpattern1 = countlist[0]
     listofpattern2 = countlist[1]
@@ -124,45 +126,74 @@ def run(filemeta, dbconn, cachelocation, mode=0):
             ]
         )
         csvwriter_acc.writerows(accinfo)
-    logger.info("accounting finished")
+    logger.debug("accounting finished")
     db_writer.close()
-    print(f"{filelocation}:dbg analysis success")
+    #print(f"{filelocation}:dbg analysis success")
 
     sys.stdout.flush()
 
 
-def processfiledbg(clientsocket: socket.socket, dbpool, filemetajson, cachelocation):
+def processfiledbg(task_status, clientsocket: socket.socket, dbpool, filemetajson, cachelocation):
     starttime = time.time()
-    if filemetajson["state"] == "canceled":
+    if filemetajson["state"] == enumerate.State.Canceled:
         logger.info(f"{filemetajson['fileuid']}:dbg analysis canceled eariler, stop")
-        return
-    conn = dbpool.get_connection()
-    try:
-        run(filemetajson, conn, cachelocation, 0)
-        logger.info(f"{filemetajson['fileuid']}:dbg analysis success")
         message = json.dumps(
             {
                 "useruid": filemetajson["useruid"],
                 "fileuid": filemetajson["fileuid"],
-                "function": filemetajson["function"],
-                "state": "success",
+                "task": filemetajson["task"],
+                "state": enumerate.State.Canceled.name,
             }
         )
-    except Exception as e:
-        message = json.dumps(
-            {
-                "useruid": filemetajson["useruid"],
-                "fileuid": filemetajson["fileuid"],
-                "function": filemetajson["function"],
-                "state": "error",
-                "error": str(e),
-            }
-        )
-        logger.error(f"{filemetajson['fileuid']}:dbg analysis error:{str(e)}")
-    clientsocket.sendall(message.encode("utf-8"))
-    dbpool.close_connection(conn)
+    else:
+        conn = dbpool.get_connection()
+        try:
+            filemetajson["state"] =enumerate.State.Running
+            logger.info(f"{filemetajson['fileuid']}:dbg analysis start")
+            run(filemetajson, conn, cachelocation, 0)
+            logger.info(f"{filemetajson['fileuid']}:dbg analysis success")
+            if filemetajson["state"]==enumerate.State.Canceled:
+                filemetajson["state"]=enumerate.State.Terminited
+                message = json.dumps(
+                    {
+                        "useruid": filemetajson["useruid"],
+                        "fileuid": filemetajson["fileuid"],
+                        "task": filemetajson["task"],
+                        "state": enumerate.State.Terminited.name,
+                    }
+                )
+                remove_cache.removelocaldirectory(cachelocation,filemetajson["fileuid"])
+                logger.info(f"{filemetajson['fileuid']}:dbg analysis canceled eariler, changing to terminated")
+            else:
+                filemetajson["state"] =enumerate.State.Success
+                message = json.dumps(
+                    {
+                        "useruid": filemetajson["useruid"],
+                        "fileuid": filemetajson["fileuid"],
+                        "task": filemetajson["task"],
+                        "state": enumerate.State.Success.name,
+                    }
+                )
+        except Exception as e:
+            filemetajson["state"] =enumerate.State.Failed
+            message = json.dumps(
+                {
+                    "useruid": filemetajson["useruid"],
+                    "fileuid": filemetajson["fileuid"],
+                    "task": filemetajson["task"],
+                    "state": enumerate.State.Failed.name,
+                    "error": str(e),
+                }
+            )
+            logger.warning(f"{filemetajson['fileuid']}:dbg analysis error:{str(e)}")
+            remove_cache.removelocaldirectory(cachelocation,filemetajson["fileuid"])
+        finally:
+            dbpool.close_connection(conn)
+        remove_cache.removelocaltgz(cachelocation,filemetajson["fileuid"])
+    clientsocket.sendall((message+"\n").encode("utf-8"))
     end_time = time.time()
-    logger.debug(f"file {filemetajson['fileuid']} cost:{(end_time-starttime):.4f}")
+    logger.debug(f"file {filemetajson['fileuid']} end as {filemetajson['state'].name} cost:{(end_time-starttime):.4f}")
+    del task_status[filemetajson['fileuid']]
 
 
 def parsejsondata(
@@ -174,29 +205,31 @@ def parsejsondata(
     cachelocation,
 ):
     logger.debug(f"currrent jsondata:{repr(filemetajson)}")
-    if "Stop" in filemetajson["function"]:
-        if (
-            filemetajson["fileuid"] in task_status
-            and filemetajson["function"][5:] == "Dbg"
-        ):
-            del task_status[filemetajson["fileuid"]]
-            logger.info(f"{filemetajson['fileuid']}:dbg analysis canceled")
-    elif filemetajson["function"] == "Dbg":
-        filemetajson["state"] = "pending"
-        task_status[filemetajson["fileuid"]] = filemetajson
-        dbgTaskListener.put(client_socket, dbpool, filemetajson, cachelocation)
-        logger.info(f"{filemetajson['fileuid']}:dbg analysis pending")
-    elif filemetajson["function"] == "sctp":
-        logger.error("unexpected function")
+    if "Stop" == filemetajson["action"]:
+        if filemetajson["fileuid"] in task_status:
+            if filemetajson["task"]=="Dbg":
+                filemetajson["state"]=enumerate.State.Canceled
+                logger.info(f"{filemetajson['fileuid']}:dbg analysis canceled")  
+        else:
+            logger.critical(f"{filemetajson['fileuid']}:task not found, when trying to stop it.")
+    elif "Start"==filemetajson["action"]:
+        if filemetajson["task"] == "Dbg":
+            task_status[filemetajson["fileuid"]] = filemetajson
+            logger.debug(f"task_status:{repr(task_status)}")
+            filemetajson["state"] = enumerate.State.Pending
+            dbgTaskListener.put(task_status,client_socket, dbpool, filemetajson, cachelocation)
+            logger.info(f"{filemetajson['fileuid']}:dbg analysis pending")
+        elif filemetajson["task"] == "sctp":
+            logger.error("unexpected task")
     else:
-        logger.error("unexpected function")
+        logger.error("unexpected action")
         client_socket.send(b"{fileuid}:error")
 
 
 def startserver(cachelocation):
     task_status = {}
-    logger.info("Current Working Directory: %s", os.getcwd())
-    logger.info("Current File Dirctory: %s", os.path.abspath("."))
+    logger.debug("Current Working Directory: %s", os.getcwd())
+    logger.debug("Current File Dirctory: %s", os.path.abspath("."))
     mypool = DatabaseConnectionPool(int(config["python"]["pool_size"]))
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -232,13 +265,18 @@ def startserver(cachelocation):
                             cachelocation,
                         )  # The Reactor/Dispatcher. CPU(blocking) task distributed to another thread.
                     logger.debug(f"remaining buffer before next packet:{repr(buffer)}")
-            except Exception as e:
+            except socket.error as e:
                 logger.warning(f"connection lost:{e}")
+            except Exception as e:
+                logger.error(f"unexpected error :{traceback.format_exc()}")
+                
+            finally:
                 dbgTaskListener.close()
+                client_socket.close()
 
 
 def configure_logger(location):
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
 
     que = queue.Queue(-1)
@@ -249,7 +287,7 @@ def configure_logger(location):
     queue_handler.setLevel(logging.DEBUG)
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(
-        logging.Formatter("%(asctime)s %(threadName)s %(message)s")
+        logging.Formatter("%(asctime)s %(levelname)s %(threadName)s %(module)s.%(funcName)s:%(lineno)d %(message)s")
     )
 
     queuelistener = logging.handlers.QueueListener(que, file_handler)
@@ -266,9 +304,11 @@ if __name__ == "__main__":
     from aiosql import DatabaseConnectionPool, createmysiambyconn
     from util import mapget, DBWriter, QueueListener
     from dbcount import constructdbgcsv, Parsefilelist_4
+    import enumerate
+    import remove_cache
     try:
         startserver(config["file"]["cache_path"])
     except Exception as e:
-        logger.critical("server error:")
+        logger.critical(f"server error:{traceback.format_exc()}")
     finally:
         queue_listener.stop()

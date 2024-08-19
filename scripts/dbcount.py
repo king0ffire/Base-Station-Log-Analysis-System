@@ -533,9 +533,9 @@ def Parsefilelist_4(database_writer, filelist, listoffour, mode=0):
         for i in range(len(filelist)):
             r1, r2 = lineswithpattern_patternlist_5(database_writer, filelist[i], listoffour)
             formattedItems.extend(r1)
-            for i in range(2):
-                countlist[i] += r2[i]
-            logger.info("file %s finished" % filelist[i])
+            for j in range(2):
+                countlist[j] += r2[j]
+            logger.debug("file %s finished" % filelist[i])
     elif mode == 1:
         try:
             with ThreadPoolExecutor(max_workers=6) as executor:

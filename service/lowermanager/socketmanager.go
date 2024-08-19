@@ -16,23 +16,24 @@ type Socket struct {
 }
 
 type SocketManager struct {
-	PythonServer *Socket
+	Socket *Socket
 }
 
-func NewPythonServerSocketManager() *SocketManager {
+func NewSocketManager() *SocketManager {
 	return &SocketManager{
-		PythonServer: NewPythonServerSocket(),
+		Socket: NewSocket(),
 	}
 }
 
-func NewPythonServerSocket() *Socket {
-	fmt.Println("conn server")
+func NewSocket() *Socket {
+	fmt.Println("waiting python server up")
 	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", util.ConfigMap["socket"]["host"], util.ConfigMap["socket"]["port"]))
-	if err != nil {
-		fmt.Printf("conn server failed, err:%v\n", err)
-		return nil
+	for err != nil {
+		time.Sleep(10 * time.Second)
+		fmt.Println("waiting python server up")
+		conn, err = net.Dial("tcp", fmt.Sprintf("%s:%s", util.ConfigMap["socket"]["host"], util.ConfigMap["socket"]["port"]))
 	}
-	fmt.Println("conn server success")
+	fmt.Println("connect server success")
 	return &Socket{
 		Socket: &conn,
 	}
@@ -40,10 +41,10 @@ func NewPythonServerSocket() *Socket {
 
 func (s *Socket) NewPythonServerListener(handlefunc func(int, []byte)) {
 	go func() { //new listen
-		buf := make([]byte, 1024)
+		//buf := make([]byte, 1024)
 		reader := bufio.NewReader(*s.Socket)
 		for {
-			n, err := reader.Read(buf)
+			line, err := reader.ReadString('\n')
 			if err != nil {
 				fmt.Println("lost connection to python server:", err)
 				for i := 1; ; i++ {
@@ -54,17 +55,18 @@ func (s *Socket) NewPythonServerListener(handlefunc func(int, []byte)) {
 					conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", util.ConfigMap["socket"]["host"], util.ConfigMap["socket"]["port"]))
 					if err != nil {
 						fmt.Printf("%v-th conn server failed, err:%v\n", i, err)
-						time.Sleep(5 * time.Second)
+						time.Sleep(10 * time.Second)
 						continue
 					}
 					s.Socket = &conn
+					reader = bufio.NewReader(*s.Socket)
 					break
 				}
 				fmt.Println("reconnect to python server success")
 				continue
 			}
-			fmt.Println("read from python server:", string(buf[:n]))
-			handlefunc(n, buf)
+			fmt.Println("read from python server:", line)
+			handlefunc(len(line), []byte(line))
 		}
 	}()
 }

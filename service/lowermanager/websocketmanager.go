@@ -24,7 +24,7 @@ type WebSocketStatusManager[websocketidtype WebSocketID] struct {
 }
 
 // key could be *websocket.Conn
-func NewSocketStatusManager[websocketidtype WebSocketID]() *WebSocketStatusManager[websocketidtype] {
+func NewWebSocketStatusManager[websocketidtype WebSocketID]() *WebSocketStatusManager[websocketidtype] {
 	return &WebSocketStatusManager[websocketidtype]{WebSocketStatus: make(map[websocketidtype]*WebSocketStatus[websocketidtype])}
 }
 

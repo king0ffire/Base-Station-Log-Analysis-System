@@ -70,7 +70,7 @@ func init() {
 	}
 	fmt.Println("database is inited")
 }
-func DeleteUserinfo[useridtype comparable](userid useridtype) {
+func DatabaseDeleteUserinfo[useridtype comparable](userid useridtype) {
 	var err error
 
 	_, err = db.Exec("delete from userinfo where userid = ?", userid)
@@ -79,7 +79,7 @@ func DeleteUserinfo[useridtype comparable](userid useridtype) {
 		return
 	}
 }
-func AddUserinfo[useridtype comparable](userid useridtype) {
+func DatabaseAddUserinfo[useridtype comparable](userid useridtype) {
 	var err error
 
 	_, err = db.Exec("insert into userinfo values (null,?)", userid)
@@ -89,7 +89,7 @@ func AddUserinfo[useridtype comparable](userid useridtype) {
 	}
 	fmt.Println("Added userid to db:", userid)
 }
-func DeleteFileinfo[fileidtype comparable](fileid fileidtype) {
+func DatabaseDeleteFileinfo[fileidtype comparable](fileid fileidtype) {
 	var err error
 
 	_, err = db.Exec("delete from fileinfo where fileid = ?", fileid)
@@ -99,7 +99,7 @@ func DeleteFileinfo[fileidtype comparable](fileid fileidtype) {
 	}
 }
 
-func Deletedbgitemstable[fileidtype comparable](fileid fileidtype) {
+func DatabaseDeletedbgitemstable[fileidtype comparable](fileid fileidtype) {
 	var err error
 
 	_, err = db.Exec("drop table dbgitems_" + fmt.Sprintf("%v", fileid))
@@ -108,7 +108,7 @@ func Deletedbgitemstable[fileidtype comparable](fileid fileidtype) {
 		return
 	}
 }
-func AddFileinfo[fileidtype comparable, useridtype comparable](fileid fileidtype, userid useridtype) {
+func DatabaseAddFileinfo[fileidtype comparable, useridtype comparable](fileid fileidtype, userid useridtype) {
 	var err error
 
 	_, err = db.Exec("insert into fileinfo values (null,?,?)", fileid, userid)
@@ -118,7 +118,7 @@ func AddFileinfo[fileidtype comparable, useridtype comparable](fileid fileidtype
 	}
 	fmt.Println("Added fileid:", fileid)
 }
-func GetByEventName[fileidtype comparable](fileid fileidtype, eventname string) []*DbgItem {
+func DatabaseGetByEventName[fileidtype comparable](fileid fileidtype, eventname string) []*DbgItem {
 	var res = []*DbgItem{}
 	rows, err := db.Query("select * from dbgitems_"+fmt.Sprintf("%v", fileid)+" where event = ?", eventname)
 	if err != nil {

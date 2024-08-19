@@ -4,6 +4,7 @@ import os
 import queue
 import threading
 from line_profiler import profile
+import traceback
 
 logger=logging.getLogger(__name__)
 def mapget(map, key):
@@ -65,38 +66,43 @@ class DBWriter:
     def _db_worker_file_2(self):
         batch=[]
         pk=1
-        cursor=self.conn.cursor()
         try:
-            while True:
-                database_csvpart_path=os.path.join(self.database_csv_location,f"part_{pk}.csv")
-                database_csvpart_path = database_csvpart_path.replace("\\","\\\\") 
-                sqlbyload=self.sqlbyload.format(database_csvpart_path,self.targetfileuid)
-                with open(database_csvpart_path, 'w', newline='') as csvfile:
+            cursor=self.conn.cursor()
+            try:
+                while True:
+                    database_csvpart_path=os.path.join(self.database_csv_location,f"part_{pk}.csv")
+                    database_csvpart_path = database_csvpart_path.replace("\\","\\\\") 
+                    sqlbyload=self.sqlbyload.format(database_csvpart_path,self.targetfileuid)
+                    with open(database_csvpart_path, 'w', newline='') as csvfile:
 
-                    csvwriter=csv.writer(csvfile)
-                    data = self.queue.get()
-                    if data is None:
-                        csvwriter.writerows(batch)
-                        raise ThreadEnd()  # 接收到结束信号，退出线程
-                    batch.extend([ [ pk+i,*data] for i,data in enumerate(data)])
-                    pk+=len(data)
-                    try:
-                        while True:
-                            data = self.queue.get(block=False)
-                            if data is None:
-                                csvwriter.writerows(batch)
-                                raise ThreadEnd()  # 接收到结束信号，退出线程
-                            batch.extend([ [ pk+i,*data] for i,data in enumerate(data)])
-                            pk+=len(data)
-                    except queue.Empty:
-                        if len(batch)<self.queue_batch_size:
-                            continue
-                        csvwriter.writerows(batch)
-                batch.clear()
-                cursor.execute(sqlbyload)
-        except ThreadEnd:
-            pass
-        cursor.execute(sqlbyload)
+                        csvwriter=csv.writer(csvfile)
+                        data = self.queue.get()
+                        if data is None:
+                            csvwriter.writerows(batch)
+                            raise ThreadEnd()  # 接收到结束信号，退出线程
+                        batch.extend([ [ pk+i,*data] for i,data in enumerate(data)])
+                        pk+=len(data)
+                        try:
+                            while True:
+                                data = self.queue.get(block=False)
+                                if data is None:
+                                    csvwriter.writerows(batch)
+                                    raise ThreadEnd()  # 接收到结束信号，退出线程
+                                batch.extend([ [ pk+i,*data] for i,data in enumerate(data)])
+                                pk+=len(data)
+                        except queue.Empty:
+                            if len(batch)<self.queue_batch_size:
+                                continue
+                            csvwriter.writerows(batch)
+                    batch.clear()
+                    cursor.execute(sqlbyload)
+            except ThreadEnd:
+                pass
+            cursor.execute(sqlbyload)
+        except Exception as e:
+            logger.debug(f"sqlbyload:{sqlbyload}")
+            logger.error(f"unexpected error:{traceback.format_exc()}")
+
 
     #阈值插入
     def _db_worker_file_3(self):
@@ -249,7 +255,7 @@ class QueueListener:
                     try:
                         handler(*args)
                     except Exception as e:
-                        logger.error(f"Error when running handler: {e}")
+                        logger.error(f"Error when running handler: {traceback.format_exc()}")
                 if has_task_done:
                     self.queue.task_done()            
                 

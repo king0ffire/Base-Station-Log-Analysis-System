@@ -29,6 +29,13 @@ const (
 	Delete
 )
 
+type Action int
+
+const (
+	Start Action = iota
+	Stop
+)
+
 func (s State) String() string {
 	switch s {
 	case Running:
@@ -77,4 +84,19 @@ func (t Task) String() string {
 }
 func (t Task) MarshalJSON() ([]byte, error) {
 	return json.Marshal(t.String())
+}
+
+func (a Action) String() string {
+	switch a {
+	case Start:
+		return "Start"
+	case Stop:
+		return "Stop"
+	default:
+		return "Unknown"
+	}
+}
+
+func (a Action) MarshalJSON() ([]byte, error) {
+	return json.Marshal(a.String())
 }

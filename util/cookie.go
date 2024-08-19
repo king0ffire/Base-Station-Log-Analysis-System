@@ -4,9 +4,9 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"strconv"
-	"time"
+	"strings"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/sessions"
 )
 
@@ -20,7 +20,8 @@ func init() {
 }
 
 func GenerateNewId(w http.ResponseWriter, r *http.Request, cook *sessions.Session) {
-	cook.Values["id"] = strconv.FormatInt(time.Now().UnixNano(), 10)
+	cook.Values["id"] = strings.ReplaceAll(uuid.New().String(), "-", "_")
+	//strconv.FormatInt(time.Now().UnixNano(), 10)
 	err := cook.Save(r, w)
 	if err != nil {
 		fmt.Println("error saving cookie:", err)

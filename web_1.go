@@ -9,26 +9,22 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"time"
+	"webapp/dataaccess"
 	"webapp/service"
-	"webapp/service/cookie"
-	"webapp/service/database"
-	"webapp/service/file"
-	"webapp/service/pythonmanager"
-	"webapp/service/session"
-	"webapp/service/util"
+	"webapp/service/topmanager"
+	"webapp/util"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
 var uploadpath = util.ConfigMap["file"]["cache_path"]
 var localport = fmt.Sprintf(":%s", util.ConfigMap["webapp"]["port"])
 
-var sessionmanager = session.NewManager[string, string, *websocket.Conn]()
-var cachequeue = &file.FileCacheQueue[string, string]{}
-var pythonstatusmanager *pythonmanager.PythonServiceStatusManager[string, string]
+var sessionmanager = topmanager.NewSessionStatusManager[string, string, *websocket.Conn]()
+var cachequeue = &topmanager.ServerCacheQueue[string, string]{}
+var pythonstatusmanager *topmanager.PythonServiceStatusManager[string, string]
 
 func init() {
 
@@ -49,19 +45,18 @@ func init() {
 		scanner.Scan()
 		fmt.Println("python output:", scanner.Text())
 	*/
-	pythonstatusmanager = pythonmanager.NewServerManager[string, string]()
-
-	(*pythonstatusmanager.PythonServer).NewPythonServerListener(service.ConstructJSONHandle(sessionmanager, pythonstatusmanager))
+	pythonstatusmanager = topmanager.NewPythonServiceStatusManager[string, string]()
+	(*pythonstatusmanager.PythonServerSocketManager.Socket).NewPythonServerListener(service.ConstructJSONHandle(sessionmanager, pythonstatusmanager, uploadpath))
 }
 
 func indexentry(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
-		cook := cookie.CookieGet(r)
+		cook := util.CookieGet(r)
 		if cook.IsNew {
 			service.NewUserintoMemory(w, r, cook, sessionmanager)
 		} else {
 			fmt.Println("cookie exist on brower")
-			userid, ok := cookie.CookieGet(r).Values["id"].(string)
+			userid, ok := util.CookieGet(r).Values["id"].(string)
 			if !ok {
 				fmt.Println("userid assert string failed")
 				return
@@ -95,12 +90,12 @@ func upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer multipartfile.Close()
-		userid, ok := cookie.CookieGet(r).Values["id"].(string)
+		userid, ok := util.CookieGet(r).Values["id"].(string)
 		if !ok {
 			fmt.Println("userid not found")
 			return
 		}
-		fileuid, created := service.MultiPartFileSaver(uploadpath, &multipartfile, multiparthandler)
+		fileuid, created := dataaccess.MultiPartFileSaver(uploadpath, &multipartfile, multiparthandler)
 		if !created {
 			fmt.Println("created failed:", created)
 			return
@@ -173,7 +168,7 @@ func sockethandler_withfilter(w http.ResponseWriter, r *http.Request) { //初始
 		return
 	}
 	filter := string(p)
-	userid, ok := cookie.CookieGet(r).Values["id"].(string)
+	userid, ok := util.CookieGet(r).Values["id"].(string)
 	if !ok {
 		fmt.Println("userid not found")
 		return
@@ -184,9 +179,9 @@ func sockethandler_withfilter(w http.ResponseWriter, r *http.Request) { //初始
 		return
 	}
 	fmt.Println("current user id: ", userid)
-	usersession.SocketstatusManager.Add(conn, filter, cookie.CookieGet(r))
-	defer usersession.SocketstatusManager.Delete(conn)
-	currentsocket, ok := usersession.SocketstatusManager.Get(conn)
+	usersession.WebSocketstatusManager.Add(conn, filter, util.CookieGet(r))
+	defer usersession.WebSocketstatusManager.Delete(conn)
+	currentsocket, ok := usersession.WebSocketstatusManager.Get(conn)
 	if !ok {
 		fmt.Println("socket not found")
 		return
@@ -214,7 +209,7 @@ func sockethandler_withfilter(w http.ResponseWriter, r *http.Request) { //初始
 
 func cleardata(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("clear cache")
-	userid, ok := cookie.CookieGet(r).Values["id"].(string)
+	userid, ok := util.CookieGet(r).Values["id"].(string)
 	if !ok {
 		fmt.Println("userid not found")
 		return
@@ -226,7 +221,7 @@ func cleardata(w http.ResponseWriter, r *http.Request) {
 	}
 	_, userholdingfiles := usersession.FileStatusManager.KeyAndValue()
 	for _, v := range userholdingfiles {
-		service.ForceStopAndDeleteFile(v.Uid, userid, uploadpath, usersession, pythonstatusmanager, cachequeue)
+		service.ForceStopAndDeleteFile(v, uploadpath, usersession, pythonstatusmanager, cachequeue)
 		fmt.Println("cleared cache:", v.Uid)
 	}
 }
@@ -246,7 +241,7 @@ func render404(w http.ResponseWriter, r *http.Request) {
 func showresults_dbg(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("showresults_dbg")
 	fileid := r.URL.Query().Get("fileid")
-	userid, ok := cookie.CookieGet(r).Values["id"].(string)
+	userid, ok := util.CookieGet(r).Values["id"].(string)
 	if !ok {
 		fmt.Println("userid not found")
 		return
@@ -272,7 +267,7 @@ func showresults_dbg(w http.ResponseWriter, r *http.Request) {
 func showresults_ids(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("showresults_ids")
 	fileid := r.URL.Query().Get("fileid")
-	userid, ok := cookie.CookieGet(r).Values["id"].(string)
+	userid, ok := util.CookieGet(r).Values["id"].(string)
 	if !ok {
 		fmt.Println("userid not found")
 		return
@@ -315,7 +310,7 @@ func showdbgitembyeventname(w http.ResponseWriter, r *http.Request) {
 		fileid := jsonmessage["fileid"].(string)
 		eventfilter := jsonmessage["eventname"].(string)
 
-		userid, ok := cookie.CookieGet(r).Values["id"].(string)
+		userid, ok := util.CookieGet(r).Values["id"].(string)
 		if !ok {
 			fmt.Println("userid not found")
 			return
@@ -333,18 +328,18 @@ func showdbgitembyeventname(w http.ResponseWriter, r *http.Request) {
 		}
 
 		//some query eventfilter and fileid
-		filtereddbgitems := database.GetByEventName(currentfilestatus.Uid, eventfilter)
+		filtereddbgitems := dataaccess.DatabaseGetByEventName(currentfilestatus.Uid, eventfilter)
 		conn.WriteJSON(filtereddbgitems)
 	}
 }
 
 func concurrencyTest(w http.ResponseWriter, r *http.Request) {
-	userid, ok := cookie.CookieGet(r).Values["id"].(string)
+	userid, ok := util.CookieGet(r).Values["id"].(string)
 	if !ok {
 		fmt.Println("userid not found")
 		return
 	}
-	fileuid := strconv.FormatInt(time.Now().UnixNano(), 10)
+	fileuid := strings.ReplaceAll(uuid.New().String(), "-", "_") //strconv.FormatInt(time.Now().UnixNano(), 10)
 	_, err := os.Stat(filepath.Join(uploadpath, fileuid+".tar.gz"))
 	fmt.Println("newfile path:", filepath.Join(uploadpath, fileuid+".tar.gz"))
 	if err != nil {

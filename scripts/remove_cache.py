@@ -1,15 +1,27 @@
 import os
 import shutil
 import sys 
-
-debug=True
-def run(filelocation, mode=0):
-    extracteddir = os.path.splitext(os.path.splitext(filelocation)[0])[0]
-    cache_path = os.path.join(extracteddir, "cache")
-    if not debug:
-        os.remove(filelocation)
-    shutil.rmtree(os.path.join(extracteddir, "logs"))
-    shutil.rmtree(cache_path)
-
+import logging
+debug=False
+def removelocaltgz(cache_location, fileuid, mode=0):
+    logger=logging.getLogger(__name__)
+    try:
+        location=os.path.join(cache_location, fileuid+".tar.gz")
+        os.remove(location)
+        logger.debug(f"remove {location} success")
+    except Exception as e:
+        logger.debug(f"remove local data failed:{e}")
+        
+        
+def removelocaldirectory(cache_location, fileuid, mode=0):
+    logger=logging.getLogger(__name__)
+    try:
+        location=os.path.join(cache_location, fileuid)
+        shutil.rmtree(location)
+        logger.debug(f"remove {location} success")
+    except Exception as e:
+        logger.debug(f"remove local data failed:{e}")        
+                
+        
 if __name__ == "__main__":
-    run(sys.argv[1], mode=int(sys.argv[2]))
+    removelocaltgz(sys.argv[1], mode=int(sys.argv[2]))

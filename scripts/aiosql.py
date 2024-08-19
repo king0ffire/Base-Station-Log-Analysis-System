@@ -45,9 +45,9 @@ def createtablebypool(fileuid):
                         foreign key (fileid) references fileinfo(fileid))"
         )
         conn.commit()
-        logger.info("file table created")
-    except mysql.connector.errors.ProgrammingError:
-        pass
+        logger.debug("file table created")
+    except mysql.connector.errors.ProgrammingError as e:
+        logger.debug("create error",e)
     finally:
         pool.close_connection(conn)
         
@@ -64,9 +64,9 @@ def createtablebyconn(conn,fileuid):
                         foreign key (fileid) references fileinfo(fileid))"
         )
         conn.commit()
-        logger.info("file table created")
-    except mysql.connector.errors.ProgrammingError:
-        pass
+        logger.debug("file table created")
+    except mysql.connector.errors.ProgrammingError as e:
+        logger.debug("create error:",e)
     
     
 
@@ -80,9 +80,9 @@ def createmysiambyconn(conn,fileuid):
             f"CREATE TABLE dbgitems_{fileuid} (id int auto_increment primary key, time VARCHAR(100), errortype VARCHAR(100), \
                     device VARCHAR(255), info VARCHAR(511), event VARCHAR(255), fileid VARCHAR(100) default '{fileuid}') engine=MyISAM")
         conn.commit()
-        logger.info("myisam table created")
-    except mysql.connector.errors.ProgrammingError:
-        pass    
+        logger.debug("myisam table created")
+    except mysql.connector.errors.ProgrammingError as e:
+        logger.debug("create error:",e)
 
 def bulkinsertprep(conn):
     cursor=conn.cursor()

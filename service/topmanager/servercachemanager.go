@@ -1,19 +1,22 @@
 package topmanager
 
-import "sync"
+import (
+	"sync"
+	"webapp/service/lowermanager"
+)
 
-type ServerCacheQueue[fileidtype comparable, useruidtype comparable] struct {
-	Queue []*FileStatus[fileidtype, useruidtype]
+type ServerCacheQueue[useruidtype comparable, fileidtype comparable] struct {
+	Queue []*lowermanager.FileStatus[useruidtype, fileidtype]
 	Lock  sync.RWMutex
 }
 
-func (m *ServerCacheQueue[fileidtype, useruidtype]) Push(file *FileStatus[fileidtype, useruidtype]) {
+func (m *ServerCacheQueue[useruidtype, fileidtype]) Push(file *lowermanager.FileStatus[useruidtype, fileidtype]) {
 	m.Lock.Lock()
 	defer m.Lock.Unlock()
 	m.Queue = append(m.Queue, file)
 }
 
-func (m *ServerCacheQueue[fileidtype, useruidtype]) Pop() {
+func (m *ServerCacheQueue[useruidtype, fileidtype]) Pop() {
 	m.Lock.Lock()
 	defer m.Lock.Unlock()
 	if len(m.Queue) > 0 {
@@ -21,13 +24,13 @@ func (m *ServerCacheQueue[fileidtype, useruidtype]) Pop() {
 	}
 }
 
-func (m *ServerCacheQueue[fileidtype, useruidtype]) Len() int {
+func (m *ServerCacheQueue[useruidtype, fileidtype]) Len() int {
 	m.Lock.RLock()
 	defer m.Lock.RUnlock()
 	return len(m.Queue)
 }
 
-func (m *ServerCacheQueue[fileidtype, useruidtype]) Top() *FileStatus[fileidtype, useruidtype] {
+func (m *ServerCacheQueue[useruidtype, fileidtype]) Top() *lowermanager.FileStatus[useruidtype, fileidtype] {
 	m.Lock.RLock()
 	defer m.Lock.RUnlock()
 	if len(m.Queue) > 0 {
@@ -36,7 +39,7 @@ func (m *ServerCacheQueue[fileidtype, useruidtype]) Top() *FileStatus[fileidtype
 	return nil
 }
 
-func (m *ServerCacheQueue[fileidtype, useruidtype]) Delete(uid fileidtype) {
+func (m *ServerCacheQueue[useruidtype, fileidtype]) Delete(uid fileidtype) {
 	m.Lock.Lock()
 	defer m.Lock.Unlock()
 	for i, v := range m.Queue {
