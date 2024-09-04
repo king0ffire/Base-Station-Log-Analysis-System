@@ -199,7 +199,7 @@ def processfiledbg(task_status, clientsocket: socket.socket, dbpool, filemetajso
 def parsejsondata(
     task_status: dict,
     dbgTaskListener: 'QueueListener',
-    client_socket,
+    client_socket:socket.socket,
     filemetajson: dict,
     dbpool,
     cachelocation,
@@ -211,11 +211,19 @@ def parsejsondata(
                 filemetajson["state"]=enumerate.State.Canceled
                 logger.info(f"{filemetajson['fileuid']}:dbg analysis canceled")  
         else:
-            logger.critical(f"{filemetajson['fileuid']}:task not found, when trying to stop it.")
+            message = json.dumps(
+                {
+                    "useruid": filemetajson["useruid"],
+                    "fileuid": filemetajson["fileuid"],
+                    "task": filemetajson["task"],
+                    "state": enumerate.State.Failed.name,
+                }
+            )
+            client_socket.sendall((message+"\n").encode("utf-8"))
+            logger.info(f"{filemetajson['fileuid']}:task not found, when trying to stop it.")
     elif "Start"==filemetajson["action"]:
         if filemetajson["task"] == "Dbg":
             task_status[filemetajson["fileuid"]] = filemetajson
-            logger.debug(f"task_status:{repr(task_status)}")
             filemetajson["state"] = enumerate.State.Pending
             dbgTaskListener.put(task_status,client_socket, dbpool, filemetajson, cachelocation)
             logger.info(f"{filemetajson['fileuid']}:dbg analysis pending")
@@ -297,7 +305,7 @@ def configure_logger(location):
 
 if __name__ == "__main__":
     config = configparser.ConfigParser()
-    config.read("config.ini")
+    config.read("../config.ini")
     queue_listener = configure_logger(config["file"]["cache_path"])
     queue_listener.start()
     logger = logging.getLogger(__name__)

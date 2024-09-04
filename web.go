@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log"
+
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/sirupsen/logrus"
 )
 
 var uploadpath = util.ConfigMap["file"]["cache_path"]
@@ -46,7 +47,8 @@ func init() {
 		fmt.Println("python output:", scanner.Text())
 	*/
 	pythonstatusmanager = topmanager.NewPythonServiceStatusManager[string, string]()
-	(*pythonstatusmanager.PythonServerSocketManager.Socket).NewPythonServerListener(service.ConstructJSONHandle(sessionmanager, pythonstatusmanager, uploadpath))
+	(*pythonstatusmanager.PythonServerSocketManager.Socket).NewPythonServerListener(service.ConstructJSONHandle(pythonstatusmanager, cachequeue, sessionmanager, uploadpath))
+	logrus.Info("python service listening!")
 }
 
 func indexentry(w http.ResponseWriter, r *http.Request) {
@@ -55,21 +57,21 @@ func indexentry(w http.ResponseWriter, r *http.Request) {
 		if cook.IsNew {
 			service.NewUserintoMemory(w, r, cook, sessionmanager)
 		} else {
-			fmt.Println("cookie exist on brower")
+			logrus.Debug("cookie exist on brower")
 			userid, ok := util.CookieGet(r).Values["id"].(string)
 			if !ok {
-				fmt.Println("userid assert string failed")
+				logrus.Debug("userid assert string failed")
 				return
 			}
 			_, ok = sessionmanager.Get(userid)
 			if !ok {
-				fmt.Println("but session expired on backend")
+				logrus.Debug("but session expired on backend")
 				service.NewUserintoMemory(w, r, cook, sessionmanager)
 			}
 		}
 		t, err := template.ParseFiles("./templates/home/index.html")
 		if err != nil {
-			fmt.Println(err)
+			logrus.Error(err)
 			return
 		}
 		t.Execute(w, struct {
@@ -80,44 +82,33 @@ func indexentry(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func upload(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("upload")
+	logrus.Debug("upload page request received")
 	if r.Method == "POST" {
-		fmt.Println("收到上传的POST请求")
+		logrus.Debug("收到上传的POST请求")
 		r.ParseMultipartForm(256 << 20) //32MB
 		multipartfile, multiparthandler, err := r.FormFile("uploadfile")
 		if err != nil {
-			fmt.Println("upload fail:", err)
+			logrus.Error("upload fail:", err)
 			return
 		}
 		defer multipartfile.Close()
 		userid, ok := util.CookieGet(r).Values["id"].(string)
 		if !ok {
-			fmt.Println("userid not found")
+			logrus.Error("userid not found")
 			return
 		}
 		fileuid, created := dataaccess.MultiPartFileSaver(uploadpath, &multipartfile, multiparthandler)
 		if !created {
-			fmt.Println("created failed:", created)
+			logrus.Error("created failed:", created)
 			return
 		}
-		service.OldFileCollection(sessionmanager, pythonstatusmanager, cachequeue, fileuid, uploadpath, userid)
-		service.AddFileToMemory(sessionmanager, pythonstatusmanager, cachequeue, fileuid, multiparthandler.Filename, 0, 0, userid)
-		/*
-			existuid, ok := session.SessionAddFileHistory(w, r, uid, multiparthandler.Filename)
-			if !ok {
-				fmt.Println("file exist, use old:", existuid)
-			} else {
-				util.ParseFile(uid, uploadpath)
-			}*/
-		//同用户内允许重名文件
-		service.ParsedbgFile(sessionmanager, pythonstatusmanager, cachequeue, fileuid, uploadpath, userid)
-
+		service.InitFileWithDBG(sessionmanager, pythonstatusmanager, cachequeue, fileuid, multiparthandler.Filename, uploadpath, 0, 0, userid)
 		http.Redirect(w, r, "/uploadedfiles?filename="+multiparthandler.Filename, http.StatusSeeOther)
-		fmt.Println("redirect success")
+		logrus.Debug("redirect success")
 	} else {
 		t, err := template.ParseFiles("./templates/upload/upload.html")
 		if err != nil {
-			fmt.Println(err)
+			logrus.Error(err)
 			return
 		}
 		t.Execute(w, struct {
@@ -130,11 +121,11 @@ func upload(w http.ResponseWriter, r *http.Request) {
 }
 
 func uploadedfiles(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("uploadedfiles")
+	logrus.Debug("uploadedfiles")
 
 	t, err := template.ParseFiles("./templates/dataanalyzer/basedata.html")
 	if err != nil {
-		fmt.Println(err)
+		logrus.Info(err)
 		return
 	}
 	t.Execute(w, struct {
@@ -157,40 +148,40 @@ var upgrader = websocket.Upgrader{
 func sockethandler_withfilter(w http.ResponseWriter, r *http.Request) { //初始话一个websocket connection
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println(err)
+		logrus.Error(err)
 		return
 	}
 	defer conn.Close()
 	//升级后从中读出filter内容
 	_, p, err := conn.ReadMessage()
 	if err != nil {
-		log.Println("read error:", err)
+		logrus.Error("read error:", err)
 		return
 	}
 	filter := string(p)
 	userid, ok := util.CookieGet(r).Values["id"].(string)
 	if !ok {
-		fmt.Println("userid not found")
+		logrus.Debug("userid not found")
 		return
 	}
 	usersession, ok := sessionmanager.Get(userid)
 	if !ok {
-		fmt.Println("usersession not found")
+		logrus.Debug("usersession not found")
 		return
 	}
-	fmt.Println("current user id: ", userid)
+	logrus.Debug("current user id: ", userid)
 	usersession.WebSocketstatusManager.Add(conn, filter, util.CookieGet(r))
 	defer usersession.WebSocketstatusManager.Delete(conn)
 	currentsocket, ok := usersession.WebSocketstatusManager.Get(conn)
 	if !ok {
-		fmt.Println("socket not found")
+		logrus.Debug("socket not found")
 		return
 	}
-	service.AnnounceAllSocketsInUser(usersession)
+	service.AnnounceAllSocketsInUser(userid, usersession)
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			log.Println("websocket read error:", err)
+			logrus.Debug("websocket read error:", err)
 			break
 		}
 		if string(message) == "clearcache" {
@@ -198,38 +189,42 @@ func sockethandler_withfilter(w http.ResponseWriter, r *http.Request) { //初始
 			currentsocket.Lock.Lock()
 			conn.WriteJSON([]interface{}{})
 			currentsocket.Lock.Unlock()
-			fmt.Println("Empty Json returned")
+			logrus.Info("Empty Json returned to ", userid)
 		} else {
 			idstobeparsed := string(message)
-			fmt.Println("start to parse ids:", idstobeparsed)
+			logrus.Info("start to parse ids:", idstobeparsed)
 			service.ParseidsFilebyCmd(sessionmanager, pythonstatusmanager, cachequeue, idstobeparsed, uploadpath, userid)
 		}
 	}
 }
 
 func cleardata(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("clear cache")
+	logrus.Debug("clear cache")
 	userid, ok := util.CookieGet(r).Values["id"].(string)
 	if !ok {
-		fmt.Println("userid not found")
+		logrus.Debug("userid not found")
 		return
 	}
 	usersession, ok := sessionmanager.Get(userid)
 	if !ok {
-		fmt.Println("usersession not found")
+		logrus.Debug("usersession not found")
 		return
 	}
 	_, userholdingfiles := usersession.FileStatusManager.KeyAndValue()
 	for _, v := range userholdingfiles {
+		v.Dbgstatus.Lock.Lock()
+		logrus.Debugf("file %v acquired lock", v.Uid)
 		service.ForceStopAndDeleteFile(v, uploadpath, usersession, pythonstatusmanager, cachequeue)
-		fmt.Println("cleared cache:", v.Uid)
+		v.Dbgstatus.Lock.Unlock()
+		logrus.Debugf("file %v released lock", v.Uid)
+		logrus.Debug("cleared cache:", v.Uid)
 	}
 }
 
 func render404(w http.ResponseWriter, r *http.Request) {
 	t, err := template.ParseFiles("./templates/404.html")
 	if err != nil {
-		fmt.Println(err)
+		logrus.Debug(err)
 		return
 	}
 	t.Execute(w, struct {
@@ -239,21 +234,21 @@ func render404(w http.ResponseWriter, r *http.Request) {
 	})
 }
 func showresults_dbg(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("showresults_dbg")
+	logrus.Debug("showresults_dbg")
 	fileid := r.URL.Query().Get("fileid")
 	userid, ok := util.CookieGet(r).Values["id"].(string)
 	if !ok {
-		fmt.Println("userid not found")
+		logrus.Debug("userid not found")
 		return
 	}
 	usersession, ok := sessionmanager.Get(userid)
 	if !ok {
-		fmt.Println("usersession not found")
+		logrus.Debug("usersession not found")
 		return
 	}
 	currentfilestatus, ok := usersession.FileStatusManager.Get(fileid)
 	if !ok {
-		fmt.Println("file status not found")
+		logrus.Debug("file status not found")
 		return
 	}
 	csvpath := filepath.Join(uploadpath, fileid, "dbg.csv")
@@ -265,21 +260,21 @@ func showresults_dbg(w http.ResponseWriter, r *http.Request) {
 }
 
 func showresults_ids(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("showresults_ids")
+	logrus.Debug("showresults_ids")
 	fileid := r.URL.Query().Get("fileid")
 	userid, ok := util.CookieGet(r).Values["id"].(string)
 	if !ok {
-		fmt.Println("userid not found")
+		logrus.Debug("userid not found")
 		return
 	}
 	usersession, ok := sessionmanager.Get(userid)
 	if !ok {
-		fmt.Println("usersession not found")
+		logrus.Debug("usersession not found")
 		return
 	}
 	filestatus, ok := usersession.FileStatusManager.Get(fileid)
 	if !ok {
-		fmt.Println("file status not found")
+		logrus.Debug("file status not found")
 		return
 	}
 	csvpath := filepath.Join(uploadpath, fileid, "ids.csv")
@@ -290,19 +285,19 @@ func showresults_ids(w http.ResponseWriter, r *http.Request) {
 }
 
 func showdbgitembyeventname(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("dbg open socket")
+	logrus.Debug("dbg open socket")
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println(err)
+		logrus.Error(err)
 		return
 	}
 	defer conn.Close()
-	defer fmt.Println("dbg close socket")
+	defer logrus.Debug("dbg close socket")
 	//升级后从中读出filter内容
 	for {
 		_, p, err := conn.ReadMessage()
 		if err != nil {
-			log.Println("read error:", err)
+			logrus.Debug("read error:", err)
 			return
 		}
 		var jsonmessage map[string]interface{}
@@ -312,18 +307,18 @@ func showdbgitembyeventname(w http.ResponseWriter, r *http.Request) {
 
 		userid, ok := util.CookieGet(r).Values["id"].(string)
 		if !ok {
-			fmt.Println("userid not found")
+			logrus.Debug("userid not found")
 			return
 		}
 		usersession, ok := sessionmanager.Get(userid)
 		if !ok {
-			fmt.Println("usersession not found")
+			logrus.Debug("usersession not found")
 			return
 		}
-		fmt.Println("current user id: ", userid)
+		logrus.Debug("current user id: ", userid)
 		currentfilestatus, ok := usersession.FileStatusManager.Get(fileid)
 		if !ok {
-			fmt.Println("file status not found")
+			logrus.Debug("file status not found")
 			return
 		}
 
@@ -336,40 +331,30 @@ func showdbgitembyeventname(w http.ResponseWriter, r *http.Request) {
 func concurrencyTest(w http.ResponseWriter, r *http.Request) {
 	userid, ok := util.CookieGet(r).Values["id"].(string)
 	if !ok {
-		fmt.Println("userid not found")
+		logrus.Debug("userid not found")
 		return
 	}
 	fileuid := strings.ReplaceAll(uuid.New().String(), "-", "_") //strconv.FormatInt(time.Now().UnixNano(), 10)
 	_, err := os.Stat(filepath.Join(uploadpath, fileuid+".tar.gz"))
-	fmt.Println("newfile path:", filepath.Join(uploadpath, fileuid+".tar.gz"))
+	logrus.Debug("newfile path:", filepath.Join(uploadpath, fileuid+".tar.gz"))
 	if err != nil {
 		cachefile, err := os.Create(filepath.Join(uploadpath, fileuid+".tar.gz"))
 		if err != nil {
-			fmt.Println("create new fail:", err)
+			logrus.Debug("create new fail:", err)
 		}
 		defer cachefile.Close()
 		file, err := os.Open("./example/Log_20240618_092153.tar.gz")
 		if err != nil {
-			fmt.Println("open file fail:", err)
+			logrus.Debug("open file fail:", err)
 		}
 		_, err = cachefile.ReadFrom(file)
 		if err != nil {
-			fmt.Println("cache fail:", err)
+			logrus.Debug("cache fail:", err)
 		}
-		service.OldFileCollection(sessionmanager, pythonstatusmanager, cachequeue, fileuid, uploadpath, userid)
-		service.AddFileToMemory(sessionmanager, pythonstatusmanager, cachequeue, fileuid, "Log_20240618_092153.tar.gz", 0, 0, userid)
-		/*
-			existuid, ok := session.SessionAddFileHistory(w, r, uid, multiparthandler.Filename)
-			if !ok {
-				fmt.Println("file exist, use old:", existuid)
-			} else {
-				util.ParseFile(uid, uploadpath)
-			}*/
-		//同用户内允许重名文件
-		service.ParsedbgFile(sessionmanager, pythonstatusmanager, cachequeue, fileuid, uploadpath, userid)
+		service.InitFileWithDBG(sessionmanager, pythonstatusmanager, cachequeue, fileuid, "Log_20240618_092153.tar.gz", uploadpath, 0, 0, userid)
 
 		http.Redirect(w, r, "/uploadedfiles?filename="+"Log_20240618_092153.tar.gz", http.StatusSeeOther)
-		fmt.Println("redirect success")
+		logrus.Debug("redirect success")
 	}
 }
 
@@ -393,10 +378,10 @@ func main() {
 	http.HandleFunc("/ws", sockethandler_withfilter)
 	http.HandleFunc("/dbgitembyeventfilter_ws", showdbgitembyeventname)
 	http.HandleFunc("/concurrencytest", concurrencyTest)
-
+	logrus.Debug("server start")
 	err := http.ListenAndServe(localport, nil)
 	if err != nil {
-		log.Fatal("ListenAndServe: ", err)
+		logrus.Error("ListenAndServe: ", err)
 	}
-	fmt.Println("server start")
+
 }

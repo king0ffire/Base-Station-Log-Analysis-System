@@ -7,7 +7,6 @@ import (
 
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 	"webapp/dataaccess"
@@ -16,66 +15,61 @@ import (
 	"webapp/util"
 
 	"github.com/gorilla/sessions"
+	"github.com/sirupsen/logrus"
 )
 
-func OldFileCollection[sessionidtype comparable, fileidtype comparable, websocketidtype lowermanager.WebSocketID](
+func InitFileWithDBG[sessionidtype comparable, fileidtype comparable, websocketidtype lowermanager.WebSocketID](
 	sessionmanager *topmanager.SessionStatusManager[sessionidtype, fileidtype, websocketidtype],
-	pythonmanager topmanager.PythonStatusManager[sessionidtype, fileidtype],
+	pythonprocessesmanager topmanager.PythonStatusManager[sessionidtype, fileidtype],
 	cachequeue *topmanager.ServerCacheQueue[sessionidtype, fileidtype],
-	fileuid fileidtype, uploadpath string, userid sessionidtype) {
-	if cachequeue.Len() > 200 {
-		fmt.Println("deleting expired file")
-		filetobedelete := cachequeue.Top()
-		usersession, ok := sessionmanager.Get(filetobedelete.Useruid)
-		if !ok {
-			fmt.Println("didnot find the user owning file to be deleted")
-		}
-		ForceStopAndDeleteFile(filetobedelete, uploadpath, usersession, pythonmanager, cachequeue)
-	}
+	fileuid fileidtype, filename string, uploadpath string, current int, max int, userid sessionidtype) {
+	filestatus := lowermanager.NewFileStatus[sessionidtype, fileidtype]()
+	filestatus.Dbgstatus.Lock.Lock()
+	logrus.Debugf("file %v acquired lock", fileuid)
+
+	filestatus.Filename = filename
+	filestatus.Uid = fileuid
+	filestatus.Useruid = userid
+	AddFileToMemory(sessionmanager, pythonprocessesmanager, cachequeue, fileuid, filename, uploadpath, current, max, userid, filestatus)
+	ParsedbgFile(sessionmanager, pythonprocessesmanager, cachequeue, fileuid, uploadpath, userid)
+	filestatus.Dbgstatus.Lock.Unlock()
+	logrus.Debugf("file %v released lock", filestatus.Uid)
 }
-
-func ForceStopAndDeleteFile[sessionidtype comparable, fileidtype comparable, websocketidtype lowermanager.WebSocketID](
-	filestatus *lowermanager.FileStatus[sessionidtype, fileidtype], uploadpath string,
-	usersession *topmanager.SessionStatus[sessionidtype, fileidtype, websocketidtype],
-	pythonmanager topmanager.PythonStatusManager[sessionidtype, fileidtype],
-	cachequeue *topmanager.ServerCacheQueue[sessionidtype, fileidtype]) {
-
-	pythonmanager.Delete(filestatus)
-	cachequeue.Delete(filestatus.Uid)
-	dataaccess.DatabaseDeleteFileinfo(filestatus.Uid)
-	dataaccess.DatabaseDeletedbgitemstable(filestatus.Uid)
-	usersession.FileStatusManager.Delete(filestatus.Uid)
-	err := dataaccess.DeleteDirFromLocal(uploadpath, fmt.Sprintf("%v", filestatus.Uid))
-	if err != nil {
-		fmt.Println("delete local file and directory error:", err)
-	}
-}
-
 func AddFileToMemory[sessionidtype comparable, fileidtype comparable, socketidtype lowermanager.WebSocketID](
 	sessionmanager *topmanager.SessionStatusManager[sessionidtype, fileidtype, socketidtype],
 	pythonprocessesmanager topmanager.PythonStatusManager[sessionidtype, fileidtype],
 	cachequeue *topmanager.ServerCacheQueue[sessionidtype, fileidtype],
-	fileuid fileidtype, filename string, current int, max int, userid sessionidtype) {
-
-	filestatus := lowermanager.NewFileStatus[sessionidtype, fileidtype]()
-	filestatus.Filename = filename
-	filestatus.Uid = fileuid
-	filestatus.Useruid = userid
+	fileuid fileidtype, filename string, uploadpath string, current int, max int, userid sessionidtype, filestatus *lowermanager.FileStatus[sessionidtype, fileidtype]) {
 	sessionmanager.AddFile(userid, fileuid, filestatus)
+	logrus.Debugf("fileid=%v added to filemangaer of user", filestatus.Uid)
 	dataaccess.DatabaseAddFileinfo(fileuid, userid)
-	sess, ok := sessionmanager.Get(userid)
-	if !ok {
-		fmt.Println("didnot find the user")
-		return
-	}
-	f, ok := sess.FileStatusManager.Get(fileuid)
-	if !ok {
-		fmt.Println("didnot find the file")
-		return
-	}
-	cachequeue.Push(f)
+	logrus.Debugf("fileid=%v added to database", filestatus.Uid)
+	PushQueueAndDeleteOld(sessionmanager, pythonprocessesmanager, cachequeue, fileuid, uploadpath, userid, filestatus)
+	logrus.Debugf("fileid=%v added to memory", filestatus.Uid)
 }
 
+func PushQueueAndDeleteOld[sessionidtype comparable, fileidtype comparable, socketidtype lowermanager.WebSocketID](
+	sessionmanager *topmanager.SessionStatusManager[sessionidtype, fileidtype, socketidtype],
+	pythonprocessesmanager topmanager.PythonStatusManager[sessionidtype, fileidtype],
+	cachequeue *topmanager.ServerCacheQueue[sessionidtype, fileidtype],
+	fileuid fileidtype, uploadpath string, userid sessionidtype, filestatus *lowermanager.FileStatus[sessionidtype, fileidtype]) {
+	filetobedeleted := cachequeue.PushAndPopWhenFull(filestatus, 5)
+	logrus.Debug(fileuid, " added to cachequeue, current length: ", cachequeue.Len())
+	if filetobedeleted != nil {
+		filetobedeleted.Dbgstatus.Lock.Lock()
+		logrus.Debugf("file %v acquired lock", filetobedeleted.Uid)
+		defer func() {
+			filetobedeleted.Dbgstatus.Lock.Unlock()
+			logrus.Debugf("file %v released lock", filetobedeleted.Uid)
+		}()
+		logrus.Debug("deleting expired file: ", filetobedeleted.Uid)
+		usersession, ok := sessionmanager.Get(filetobedeleted.Useruid)
+		if !ok {
+			logrus.Debug("didnot find the user owning file to be deleted")
+		}
+		ForceStopAndDeleteFile(filetobedeleted, uploadpath, usersession, pythonprocessesmanager, cachequeue)
+	}
+}
 func ParseidsFilebyCmd[sessionidtype comparable, fileidtype comparable, websocketidtype lowermanager.WebSocketID](
 	sessionmanager *topmanager.SessionStatusManager[sessionidtype, fileidtype, websocketidtype],
 	pythonprocessesmanager topmanager.PythonStatusManager[sessionidtype, fileidtype],
@@ -84,12 +78,12 @@ func ParseidsFilebyCmd[sessionidtype comparable, fileidtype comparable, websocke
 
 	usersession, ok := sessionmanager.Get(userid)
 	if !ok {
-		fmt.Println("didnot find the user")
+		logrus.Debug("didnot find the user")
 		return
 	}
 	currentfilestatus, ok := usersession.FileStatusManager.Get(fileuid)
 	if !ok {
-		fmt.Println("didnot find the file")
+		logrus.Debug("didnot find the file")
 		return
 	}
 
@@ -102,24 +96,20 @@ func ParseidsFilebyCmd[sessionidtype comparable, fileidtype comparable, websocke
 
 	currentfilestatus.Sctpstatus.Lock.Lock()
 	if currentfilestatus.Dbgstatus.State != util.Finished {
-		fmt.Println("the dbglog analysis is not finished, should wait")
-		return
-	}
-	if currentfilestatus.Sctpstatus.State != util.Noschedule {
-		fmt.Println("the sctp analysis is being processed")
+		logrus.Info("the dbglog analysis is not finished, should wait")
 		return
 	}
 	currentfilestatus.Sctpstatus.State = util.Created
 	currentfilestatus.Sctpstatus.Lock.Unlock()
 	usersession.FileStatusManager.Set(fileuid, currentfilestatus)
 	if err := idscmd.Cmd.Start(); err != nil {
-		fmt.Println("start python fail:", err)
+		logrus.Error("start python fail:", err)
 		return
 	}
 
 	go func() {
-		fmt.Println("Go thread start:", stringuid)
-		defer fmt.Println("Go thread end:", stringuid)
+		logrus.Debug("Go thread start:", stringuid)
+		defer logrus.Debug("Go thread end:", stringuid)
 		defer func() {
 			idscmd.Cmd.Wait()
 			idscmd.State = util.Idle
@@ -130,102 +120,43 @@ func ParseidsFilebyCmd[sessionidtype comparable, fileidtype comparable, websocke
 		idscmd.State = util.Running
 		scanner := bufio.NewScanner(outpipe)
 		scanner.Scan()
-		fmt.Println("Received first line of ids analysis:", stringuid, ":", scanner.Text())
+		logrus.Debug("Received first line of ids analysis:", stringuid, ":", scanner.Text())
 		intText, err := strconv.Atoi(scanner.Text())
 		if err != nil {
-			fmt.Println("text conversion:", err)
+			logrus.Error("text conversion:", err)
 			currentfilestatus.Sctpstatus.State = util.Failed
 			return
 		}
 		currentfilestatus.Sctpstatus.Maxvalue = intText
 		ok = usersession.FileStatusManager.Set(currentfilestatus.Uid, currentfilestatus)
 		if !ok {
-			fmt.Println("the file is already cleaned")
+			logrus.Debug("the file is already cleaned")
 			currentfilestatus.Sctpstatus.State = util.Failed
 			return
 		}
-		AnnounceAllSocketsInUser(usersession)
+		AnnounceAllSocketsInUser(userid, usersession)
 		for scanner.Scan() {
-			fmt.Println("python outputs:", scanner.Text())
+			logrus.Debug("python outputs:", scanner.Text())
 			if scanner.Text() == "sctp_finished_one" {
 				currentfilestatus.Sctpstatus.Currentvalue++
 				ok := usersession.FileStatusManager.Set(currentfilestatus.Uid, currentfilestatus)
 				if !ok { //异常退出
-					fmt.Println("the file is already cleaned")
+					logrus.Debug("the file is already cleaned")
 					currentfilestatus.Sctpstatus.State = util.Failed
 					return
 				}
 				if currentfilestatus.Sctpstatus.Currentvalue == currentfilestatus.Sctpstatus.Maxvalue {
 					currentfilestatus.Sctpstatus.State = util.Finished
-					AnnounceAllSocketsInUser(usersession)
+					AnnounceAllSocketsInUser(userid, usersession)
 					return
 				}
-				AnnounceAllSocketsInUser(usersession)
+				AnnounceAllSocketsInUser(userid, usersession)
 			}
 		}
 		currentfilestatus.Sctpstatus.State = util.Failed
-		AnnounceAllSocketsInUser(usersession)
+		AnnounceAllSocketsInUser(userid, usersession)
 		//走到这里则python已退出
 	}()
-}
-func ParsedbgFile[sessionidtype comparable, fileidtype comparable, socketidtype lowermanager.WebSocketID](
-	sessionmanager *topmanager.SessionStatusManager[sessionidtype, fileidtype, socketidtype],
-	pythonstatusmanager topmanager.PythonStatusManager[sessionidtype, fileidtype],
-	cachequeue *topmanager.ServerCacheQueue[sessionidtype, fileidtype], fileuid fileidtype, uploadpath string, userid sessionidtype) {
-
-	usersession, ok := sessionmanager.Get(userid)
-	if !ok {
-		fmt.Println("didnot find the user")
-		return
-	}
-	currentfilestatus, ok := usersession.FileStatusManager.Get(fileuid)
-	if !ok {
-		fmt.Println("didnot find the file")
-		return
-	}
-
-	stringuid := fmt.Sprintf("%v", fileuid)
-	pythonstatusmanager.Add(currentfilestatus, filepath.Join(uploadpath, stringuid+".tar.gz")) //三个命令一起初始化了
-	taskstatus, _ := pythonstatusmanager.Get(currentfilestatus)
-	dbgtaskstatus := taskstatus[util.Dbg]
-
-	if dbgtaskstatus.Calltype == util.Cmd {
-		outpipe, _ := dbgtaskstatus.Cmd.StdoutPipe()
-		dbgtaskstatus.Cmd.Stderr = os.Stderr
-
-		currentfilestatus.Dbgstatus.State = util.Created
-		usersession.FileStatusManager.Set(fileuid, currentfilestatus)
-		pythonstatusmanager.Start(currentfilestatus, util.Dbg)
-		dbgtaskstatus.State = util.Running
-		currentfilestatus.Dbgstatus.State = util.Running
-		AnnounceAllSocketsInUser(usersession)
-		go func() {
-			fmt.Println("Go thread start:", stringuid)
-			defer fmt.Println("Go thread end:", stringuid)
-			defer func() {
-				dbgtaskstatus.Cmd.Wait()
-				dbgtaskstatus.State = util.Idle
-			}()
-			scanner := bufio.NewScanner(outpipe)
-			for scanner.Scan() {
-				fmt.Println("python outputs:", scanner.Text())
-				if scanner.Text() == "dbg analysis success" {
-					currentfilestatus.Dbgstatus.State = util.Finished
-					AnnounceAllSocketsInUser(usersession)
-					return
-				}
-			}
-			currentfilestatus.Dbgstatus.State = util.Failed
-			AnnounceAllSocketsInUser(usersession)
-		}()
-	} else if dbgtaskstatus.Calltype == util.Rpc {
-		dbgtaskstatus.State = util.Running
-		currentfilestatus.Dbgstatus.State = util.Created
-		pythonstatusmanager.Start(currentfilestatus, util.Dbg)
-		currentfilestatus.Dbgstatus.State = util.Running
-		AnnounceAllSocketsInUser(usersession)
-	}
-
 }
 
 /*
@@ -242,8 +173,9 @@ func AnnounceAllSocketsInUser[sessionidtype comparable, fileidtype comparable, s
 	}
 */
 func AnnounceAllSocketsInUser[sessionidtype comparable, fileidtype comparable, websocketidtype lowermanager.WebSocketID](
+	userid sessionidtype,
 	usersession *topmanager.SessionStatus[sessionidtype, fileidtype, websocketidtype]) {
-	fmt.Println("announce all sockets in user")
+	logrus.Debug("announce all sockets in user: ", userid)
 	_, userholdfilestatus := usersession.FileStatusManager.KeyAndValue()
 	_, userholdsocketstatus := usersession.WebSocketstatusManager.KeyAndValue()
 	for _, v := range userholdsocketstatus {
@@ -294,7 +226,7 @@ func NewUserintoMemory[socketidtype lowermanager.WebSocketID, fileidtype compara
 	util.GenerateNewId(w, r, cook)
 	userid, ok := util.CookieGet(r).Values["id"].(string)
 	if !ok {
-		fmt.Println("userid assert string failed")
+		logrus.Error("userid assert string failed")
 		return
 	}
 	sessionmanager.Add(userid)
@@ -302,48 +234,99 @@ func NewUserintoMemory[socketidtype lowermanager.WebSocketID, fileidtype compara
 	time.AfterFunc(48*time.Hour, func() {
 		dataaccess.DatabaseDeleteUserinfo(userid)
 		sessionmanager.Delete(userid)
-		fmt.Println("Delete User since expired:", userid)
+		logrus.Debug("Delete User since expired:", userid)
 	})
-	fmt.Println("Add User:", userid)
+	logrus.Debug("Add User:", userid)
 }
 
-func ConstructJSONHandle[sessionidtype comparable, fileidtype comparable, socketidtype lowermanager.WebSocketID](
-	sessionmanager *topmanager.SessionStatusManager[sessionidtype, fileidtype, socketidtype],
-	pythonstatusmanager topmanager.PythonStatusManager[sessionidtype, fileidtype], cache_location string) func(int, []byte) {
+func ConstructJSONHandle[sessionidtype comparable, fileidtype comparable, websocketidtype lowermanager.WebSocketID](
+	pythonmanager topmanager.PythonStatusManager[sessionidtype, fileidtype],
+	cachequeue *topmanager.ServerCacheQueue[sessionidtype, fileidtype],
+	sessionmanager *topmanager.SessionStatusManager[sessionidtype, fileidtype, websocketidtype],
+	cache_location string) func(int, []byte) {
 	return func(n int, jsondump []byte) {
 		var jsondata map[string]interface{}
 		err := json.Unmarshal(jsondump[:n], &jsondata)
 		if err != nil {
-			fmt.Println("json unmarshal:", err)
+			logrus.Error("json unmarshal:", err)
 			return
 		}
 		useruid := jsondata["useruid"].(sessionidtype)
 		fileuid := jsondata["fileuid"].(fileidtype)
 		usersession, ok := sessionmanager.Get(useruid)
 		if !ok {
-			fmt.Println("useruid not exist")
-			dataaccess.DeleteDirFromLocal(cache_location, fmt.Sprintf("%v", fileuid))
-			dataaccess.DeleteFileFromLocal(cache_location, fmt.Sprintf("%v", fileuid))
+			logrus.Debug("fileid ", fileuid, ":useruid ", useruid, "; userid not exist")
+			dataaccess.DatabaseDeleteFileinfo(useruid)
+			dataaccess.DatabaseDeletedbgitemstable(useruid)
+			err := dataaccess.DeleteDirFromLocal(cache_location, fmt.Sprintf("%v", useruid))
+			if err != nil {
+				logrus.Errorf("delete %v directory error:%s\n", useruid, err)
+			}
+			err = dataaccess.DeleteFileFromLocal(cache_location, fmt.Sprintf("%v", useruid))
+			if err != nil {
+				logrus.Errorf("delete %v file error:%s\n", useruid, err)
+			}
 			return
 		}
+		defer AnnounceAllSocketsInUser(useruid, usersession)
+
 		currentfilestatus, ok := usersession.FileStatusManager.Get(fileuid)
 		if !ok {
-			fmt.Println("fileuid not exist")
-			dataaccess.DeleteDirFromLocal(cache_location, fmt.Sprintf("%v", fileuid))
-			dataaccess.DeleteFileFromLocal(cache_location, fmt.Sprintf("%v", fileuid))
+			logrus.Debug("fileid ", fileuid, ":useruid ", useruid, "; fileid not exist")
+			cachequeue.Delete(fileuid)
+			dataaccess.DatabaseDeleteFileinfo(fileuid)
+			dataaccess.DatabaseDeletedbgitemstable(fileuid)
+			usersession.FileStatusManager.Delete(fileuid)
+			err := dataaccess.DeleteDirFromLocal(cache_location, fmt.Sprintf("%v", fileuid))
+			if err != nil {
+				logrus.Errorf("delete %v directory error:%s\n", fileuid, err)
+			}
+			err = dataaccess.DeleteFileFromLocal(cache_location, fmt.Sprintf("%v", fileuid))
+			if err != nil {
+				logrus.Errorf("delete %v file error:%s\n", fileuid, err)
+			}
 			return
+		}
+		if currentfilestatus.Dbgstatus.State == util.Terminated || currentfilestatus.Sctpstatus.State == util.Terminated {
+			if currentfilestatus.Dbgstatus.State != util.Running && currentfilestatus.Sctpstatus.State != util.Running {
+				logrus.Debug("scheduled termination for: ", fileuid)
+				pythonmanager.Delete(currentfilestatus)
+				cachequeue.Delete(fileuid)
+				dataaccess.DatabaseDeleteFileinfo(fileuid)
+				dataaccess.DatabaseDeletedbgitemstable(fileuid)
+				usersession.FileStatusManager.Delete(fileuid)
+				err := dataaccess.DeleteDirFromLocal(cache_location, fmt.Sprintf("%v", fileuid))
+				if err != nil {
+					logrus.Errorf("delete %v directory error:%s\n", fileuid, err)
+				}
+				err = dataaccess.DeleteFileFromLocal(cache_location, fmt.Sprintf("%v", fileuid))
+				if err != nil {
+					logrus.Errorf("delete %v file error:%s\n", fileuid, err)
+				}
+				return
+			}
 		}
 		if jsondata["state"] == "Success" {
 			if jsondata["task"] == "Dbg" {
-				pythonstatusmanager.SetState(currentfilestatus, util.Dbg, util.Idle)
+				pythonmanager.SetState(currentfilestatus, util.Dbg, util.Idle)
 				currentfilestatus.Dbgstatus.State = util.Finished
 				usersession.FileStatusManager.Set(fileuid, currentfilestatus)
-				AnnounceAllSocketsInUser(usersession)
 			}
 		} else {
-			dataaccess.DeleteDirFromLocal(cache_location, fmt.Sprintf("%v", fileuid))
-			dataaccess.DeleteFileFromLocal(cache_location, fmt.Sprintf("%v", fileuid))
+			logrus.Debug("file ", fileuid, " might be deleted earlier")
+			pythonmanager.Delete(currentfilestatus)
+			cachequeue.Delete(fileuid)
+			dataaccess.DatabaseDeleteFileinfo(fileuid)
+			dataaccess.DatabaseDeletedbgitemstable(fileuid)
+			usersession.FileStatusManager.Delete(fileuid)
+			err := dataaccess.DeleteDirFromLocal(cache_location, fmt.Sprintf("%v", fileuid))
+			if err != nil {
+				logrus.Errorf("delete %v directory error:%s\n", fileuid, err)
+			}
+			err = dataaccess.DeleteFileFromLocal(cache_location, fmt.Sprintf("%v", fileuid))
+			if err != nil {
+				logrus.Errorf("delete %v file error:%s\n", fileuid, err)
+			}
 		}
-
 	}
 }

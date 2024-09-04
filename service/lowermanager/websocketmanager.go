@@ -20,7 +20,7 @@ type WebSocketStatus[websocketidtype WebSocketID] struct {
 }
 type WebSocketStatusManager[websocketidtype WebSocketID] struct {
 	WebSocketStatus map[websocketidtype]*WebSocketStatus[websocketidtype]
-	Lock            sync.RWMutex
+	lock            sync.RWMutex
 }
 
 // key could be *websocket.Conn
@@ -29,29 +29,29 @@ func NewWebSocketStatusManager[websocketidtype WebSocketID]() *WebSocketStatusMa
 }
 
 func (m *WebSocketStatusManager[websocketidtype]) Add(key websocketidtype, filter string, cookie *sessions.Session) {
-	m.Lock.Lock()
+	m.lock.Lock()
 	m.WebSocketStatus[key] = &WebSocketStatus[websocketidtype]{Filter: filter, Cookie: cookie, Socketid: key}
-	m.Lock.Unlock()
+	m.lock.Unlock()
 }
 func (m *WebSocketStatusManager[websocketidtype]) Delete(key websocketidtype) {
-	m.Lock.Lock()
+	m.lock.Lock()
 	delete(m.WebSocketStatus, key)
-	m.Lock.Unlock()
+	m.lock.Unlock()
 }
 
 func (m *WebSocketStatusManager[websocketidtype]) Get(key websocketidtype) (*WebSocketStatus[websocketidtype], bool) {
-	m.Lock.RLock()
+	m.lock.RLock()
 	v, ok := m.WebSocketStatus[key]
-	m.Lock.RUnlock()
+	m.lock.RUnlock()
 	return v, ok
 }
 
 func (m *WebSocketStatusManager[websocketidtype]) Set(key websocketidtype, cookie *sessions.Session) bool {
 	s, ok := m.Get(key)
 	if ok {
-		m.Lock.Lock()
+		m.lock.Lock()
 		s.Cookie = cookie
-		m.Lock.Unlock()
+		m.lock.Unlock()
 		return true
 	}
 	return false
@@ -61,11 +61,11 @@ func (m *WebSocketStatusManager[websocketidtype]) KeyAndValue() ([]websocketidty
 	socketlist := []websocketidtype{}
 	statuslist := []*WebSocketStatus[websocketidtype]{}
 
-	m.Lock.RLock()
+	m.lock.RLock()
 	for k, v := range m.WebSocketStatus {
 		socketlist = append(socketlist, k)
 		statuslist = append(statuslist, v)
 	}
-	m.Lock.RUnlock()
+	m.lock.RUnlock()
 	return socketlist, statuslist
 }

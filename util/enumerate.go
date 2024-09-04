@@ -8,8 +8,8 @@ const (
 	Running State = iota
 	Idle
 
-	Noschedule
 	Created
+	Terminated
 	Finished
 	Failed
 )
@@ -42,14 +42,14 @@ func (s State) String() string {
 		return "Running"
 	case Idle:
 		return "Idle"
-	case Noschedule:
-		return "Noschedule"
 	case Created:
 		return "Created"
 	case Finished:
 		return "Finished"
 	case Failed:
 		return "Failed"
+	case Terminated:
+		return "Terminated"
 	default:
 		return "Unknown"
 	}

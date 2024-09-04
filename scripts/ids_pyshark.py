@@ -8,7 +8,7 @@ from pyshark.capture.capture import TSharkCrashException
 import pyshark
 from os.path import basename
 
-
+logger=logging.getLogger(__name__)
 def pcapInfoToListBy2Filters(filename, filter1, filter2, eventloop=None):
     csvlist=[]
     display_filter=filter1+"||"+filter2
@@ -26,10 +26,12 @@ def pcapInfoToListBy2Filters(filename, filter1, filter2, eventloop=None):
                                             packetsummary.protocol,packetsummary.info,
                                             packetdetail.s1ap.get_field(field1.upper()),
                                             packetdetail.s1ap.get_field(field2.upper())])
+                    logger.debug(f"length of summary capture : {len(capsummary)}, length of detail capture : {len(capdetail)}")
             except TSharkCrashException:
                 print("detail cap catched")
+                logger.debug(f"filename:{filename} : detail cap catched")
     except TSharkCrashException:
-            print("summary cap catched")
+            print(f"filename:{filename} : summary cap catched")
     print("print \"%s\" successful"%filename)
     return csvlist
 
@@ -39,8 +41,6 @@ def process_one_file_by2filters(csvwriter,filename,filter1,filter2):
     csvwriter.writerows(pcapInfoToListBy2Filters(filename,filter1,filter2))
     
 def sctpanalysis(csvfile_id,csvwriter_id, sctp_file_list,cache_path,filter1,filter2, mode=0):
-    from ids_pyshark import pcapInfoToListBy2Filters, process_one_file_by2filters
-    logger=logging.getLogger(__name__)
     logger.info("sctp started")
     csvwriter_id.writerow(
         [

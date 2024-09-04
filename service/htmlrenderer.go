@@ -11,6 +11,8 @@ import (
 	"text/template"
 	"webapp/service/accounting"
 	"webapp/util"
+
+	"github.com/sirupsen/logrus"
 )
 
 type IDSTemplateDatastruct struct {
@@ -29,7 +31,7 @@ func Renderbyidsfile(w http.ResponseWriter, r *http.Request, csvpath string, fil
 	t, err = template.ParseFiles("./templates/dataanalyzer/show_ids.html")
 
 	if err != nil {
-		fmt.Println(err)
+		logrus.Error(err)
 		return
 	}
 	IDSTemplateData := IDSTemplateDatastruct{
@@ -55,7 +57,7 @@ func Renderbyidsfile(w http.ResponseWriter, r *http.Request, csvpath string, fil
 	csvdata, err := csvreader.ReadAll()
 	if err != nil {
 		t.Execute(w, IDSTemplateData)
-		fmt.Println("csvreader.ReadAll() error:", err)
+		logrus.Error("csvreader.ReadAll() error:", err)
 		return
 	}
 
@@ -86,7 +88,7 @@ func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csv
 	headername = "DBG Event Count List"
 	t, err = template.ParseFiles("./templates/dataanalyzer/show_dbg.html")
 	if err != nil {
-		fmt.Println(err)
+		logrus.Error(err)
 		return
 	}
 
@@ -110,7 +112,7 @@ func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csv
 		Filename:     filename,
 	}
 	if csvpath == "" {
-		fmt.Println("no file selected")
+		logrus.Debug("no file selected")
 		t.Execute(w, DBGTemplateData)
 		return
 	}
@@ -118,7 +120,7 @@ func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csv
 	csvfile, err := os.Open(csvpath)
 	DBGTemplateData.Downloadlink = "../" + strings.ReplaceAll(csvpath, "\\", "/")
 	if err != nil {
-		fmt.Println("csv open failed")
+		logrus.Error("csv open failed")
 		t.Execute(w, DBGTemplateData)
 		return
 	}
@@ -126,7 +128,7 @@ func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csv
 
 	accountingfile, err := os.Open(csvpath_acc)
 	if err != nil {
-		fmt.Println("acc open failed")
+		logrus.Error("acc open failed")
 		t.Execute(w, DBGTemplateData)
 		return
 	}
@@ -135,7 +137,7 @@ func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csv
 	csvreader := csv.NewReader(csvfile)
 	csvdata, err := csvreader.ReadAll()
 	if err != nil {
-		fmt.Println(w, "Read failed:", err)
+		logrus.Error(w, "Read failed:", err)
 	}
 	if len(csvdata) > 1 {
 		util.Sortdata(csvdata[1:])
@@ -148,7 +150,7 @@ func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csv
 	accreader := csv.NewReader(accountingfile)
 	tempNumbers, err := accreader.ReadAll()
 	if err != nil {
-		fmt.Println("read failed", err)
+		logrus.Error("read failed", err)
 	}
 	for i, strrow := range tempNumbers[:4] {
 		for j, str := range strrow {
@@ -172,14 +174,14 @@ func Renderbydbgfile(w http.ResponseWriter, r *http.Request, csvpath string, csv
 	for _, v := range DBGTemplateData.Data {
 		err := json.Unmarshal([]byte(strings.ReplaceAll(v[2], "'", "\"")), &tagsofevent)
 		if err != nil {
-			fmt.Println(v[2])
-			fmt.Println("json unmarshal failed", err)
+			logrus.Error(v[2])
+			logrus.Error("json unmarshal failed", err)
 			return
 		}
 		for i, _ := range tagsofevent {
 			eventcount, err := strconv.Atoi(v[1])
 			if err != nil {
-				fmt.Println("strconv failed", err)
+				logrus.Error("strconv failed", err)
 			}
 			DBGTemplateData.Categories[tagsofevent[i]].AddEvent(v[0], eventcount)
 			DBGTemplateData.Categories[tagsofevent[i]].Count += eventcount

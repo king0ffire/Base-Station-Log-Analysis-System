@@ -23,7 +23,7 @@ type FileStatus[useruidtype comparable, fileidtype comparable] struct {
 
 type FileStatusManager[useruidtype comparable, fileidtype comparable] struct {
 	Filestatus map[fileidtype]*FileStatus[useruidtype, fileidtype]
-	Lock       sync.RWMutex
+	lock       sync.RWMutex
 }
 
 func FileNameFilter[useruidtype comparable, fileidtype comparable](files []*FileStatus[useruidtype, fileidtype], filter string) []*FileStatus[useruidtype, fileidtype] {
@@ -39,33 +39,33 @@ func NewFileStatusManager[useruidtype comparable, fileidtype comparable]() *File
 	return &FileStatusManager[useruidtype, fileidtype]{Filestatus: make(map[fileidtype]*FileStatus[useruidtype, fileidtype])}
 }
 func NewFileStatus[useruidtype comparable, fileidtype comparable]() *FileStatus[useruidtype, fileidtype] {
-	return &FileStatus[useruidtype, fileidtype]{Dbgstatus: &AnalysisStatus{State: util.Noschedule}, Sctpstatus: &AnalysisStatus{State: util.Noschedule}}
+	return &FileStatus[useruidtype, fileidtype]{Dbgstatus: &AnalysisStatus{State: util.Created}, Sctpstatus: &AnalysisStatus{State: util.Created}}
 }
 func (m *FileStatusManager[useruidtype, fileidtype]) Add(fileuid fileidtype, filestatus *FileStatus[useruidtype, fileidtype]) {
-	m.Lock.Lock()
+	m.lock.Lock()
 	m.Filestatus[fileuid] = filestatus
-	m.Lock.Unlock()
+	m.lock.Unlock()
 }
 
 func (m *FileStatusManager[useruidtype, fileidtype]) Delete(fileuid fileidtype) {
-	m.Lock.Lock()
+	m.lock.Lock()
 	delete(m.Filestatus, fileuid)
-	m.Lock.Unlock()
+	m.lock.Unlock()
 }
 
 func (m *FileStatusManager[useruidtype, fileidtype]) Get(fileuid fileidtype) (*FileStatus[useruidtype, fileidtype], bool) {
-	m.Lock.RLock()
+	m.lock.RLock()
 	v, ok := m.Filestatus[fileuid]
-	m.Lock.RUnlock()
+	m.lock.RUnlock()
 	return v, ok
 }
 
 func (m *FileStatusManager[useruidtype, fileidtype]) Set(fileuid fileidtype, obj *FileStatus[useruidtype, fileidtype]) bool {
 	_, ok := m.Get(fileuid)
 	if ok {
-		m.Lock.Lock()
+		m.lock.Lock()
 		m.Filestatus[fileuid] = obj
-		m.Lock.Unlock()
+		m.lock.Unlock()
 		return true
 	}
 	return false
@@ -74,12 +74,12 @@ func (m *FileStatusManager[useruidtype, fileidtype]) Set(fileuid fileidtype, obj
 func (m *FileStatusManager[useruidtype, fileidtype]) KeyAndValue() ([]fileidtype, []*FileStatus[useruidtype, fileidtype]) {
 	keys := []fileidtype{}
 	values := []*FileStatus[useruidtype, fileidtype]{}
-	m.Lock.RLock()
+	m.lock.RLock()
 	for k, v := range m.Filestatus {
 		keys = append(keys, k)
 		values = append(values, v)
 	}
-	m.Lock.RUnlock()
+	m.lock.RUnlock()
 	return keys, values
 }
 

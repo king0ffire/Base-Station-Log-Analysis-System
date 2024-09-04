@@ -40,7 +40,7 @@
       var dbgstatus = value["Dbgstatus"];
       var idsstatus = value["Sctpstatus"];
 
-      cell1.innerHTML = filename;
+      cell1.innerHTML = uid;
       cell1.setAttribute("class", "text-center")
 
       if (dbgstatus["State"] == "Failed") {
@@ -76,7 +76,7 @@
           window.location.href = "/results/ids?fileid=" + uid
         })
         button2.innerHTML = "查看sctp文件统计";
-      }else if (idsstatus["State"] == "Noschedule") {
+      }else if (idsstatus["State"] == "Created") {
         button2.setAttribute("class", "btn btn-info")
         button2.addEventListener("click", function () {
           myWebSocket.send(uid);

@@ -1,7 +1,6 @@
 package dataaccess
 
 import (
-	"fmt"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -9,42 +8,39 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 func DeleteDirFromLocal(uploadpath string, uid string) error { //cache下的文件和文件夹的删除
 	err := os.RemoveAll(filepath.Join(uploadpath, uid))
+	logrus.Debug("first delete file directory: ", uid)
 	if err != nil {
+		logrus.Debug("first delete file failed:", err)
 		go func() {
-			time.Sleep(time.Second * 1)
+			time.Sleep(time.Second * 10)
 			err2 := os.RemoveAll(filepath.Join(uploadpath, uid))
-			fmt.Println("retried delete file")
+			logrus.Debug("retried delete file directory: ", uid)
 			if err2 != nil {
-				fmt.Println("retry error:", err2)
+				logrus.Debug("retry error:", err2)
 			}
 		}()
-	}
-	err = os.Remove(filepath.Join(uploadpath, uid+".tar.gz"))
-	if err != nil {
-		fmt.Println("delete tar.gz error:", err)
 	}
 	return err
 }
 
 func DeleteFileFromLocal(uploadpath string, uid string) error { //cache下的文件和文件夹的删除
 	err := os.Remove(filepath.Join(uploadpath, uid+".tar.gz"))
+	logrus.Debug("first delete file:", uid)
 	if err != nil {
+		logrus.Debug("first delete file failed:", err)
 		go func() {
-			time.Sleep(time.Second * 1)
-			err2 := os.RemoveAll(filepath.Join(uploadpath, uid))
-			fmt.Println("retried delete file")
+			time.Sleep(time.Second * 10)
+			err2 := os.RemoveAll(filepath.Join(uploadpath, uid+".tar.gz"))
+			logrus.Debug("retried delete file:", uid)
 			if err2 != nil {
-				fmt.Println("retry error:", err2)
+				logrus.Debug("retry error:", err2)
 			}
 		}()
-	}
-	err = os.Remove(filepath.Join(uploadpath, uid+".tar.gz"))
-	if err != nil {
-		fmt.Println("delete tar.gz error:", err)
 	}
 	return err
 }
@@ -52,24 +48,24 @@ func DeleteFileFromLocal(uploadpath string, uid string) error { //cache下的文
 func MultiPartFileSaver(savepath string, file *multipart.File, handler *multipart.FileHeader) (string, bool) {
 	uid := strings.ReplaceAll(uuid.New().String(), "-", "_") //strconv.FormatInt(time.Now().UnixNano(), 10)
 	_, err := os.Stat(filepath.Join(savepath, uid+".tar.gz"))
-	fmt.Println("newfile path:", filepath.Join(savepath, uid+".tar.gz"))
+	logrus.Debug("newfile path:", filepath.Join(savepath, uid+".tar.gz"))
 	if err != nil {
 		cachefile, err := os.Create(filepath.Join(savepath, uid+".tar.gz"))
 		if err != nil {
-			fmt.Println("create new fail:", err)
+			logrus.Debug("create new fail:", err)
 			return "", false
 		}
 		defer cachefile.Close()
 
 		_, err = cachefile.ReadFrom(*file)
 		if err != nil {
-			fmt.Println("cache fail:", err)
+			logrus.Debug("cache fail:", err)
 			return "", false
 		}
 
 		return uid, true
 	} else {
-		fmt.Println("file already exists, fatal error, skip parsing")
+		logrus.Debug("file already exists, fatal error, skip parsing")
 		return "", false
 		/*
 			max, current, existence := util.CheckFileExist(handler.Filename)

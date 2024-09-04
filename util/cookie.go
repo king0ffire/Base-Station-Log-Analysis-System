@@ -2,12 +2,12 @@ package util
 
 import (
 	"encoding/base64"
-	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/sessions"
+	"github.com/sirupsen/logrus"
 )
 
 var key, _ = base64.RawStdEncoding.DecodeString("A+whGsPHGm88co6U+ozfFwR7oAsWaNK1VbfQxQxvTi0=")
@@ -24,9 +24,9 @@ func GenerateNewId(w http.ResponseWriter, r *http.Request, cook *sessions.Sessio
 	//strconv.FormatInt(time.Now().UnixNano(), 10)
 	err := cook.Save(r, w)
 	if err != nil {
-		fmt.Println("error saving cookie:", err)
+		logrus.Error("error saving cookie:", err)
 	}
-	fmt.Println("cookie init")
+	logrus.Debug("cookie init")
 }
 
 /*
@@ -36,7 +36,7 @@ func GenerateNewId(w http.ResponseWriter, r *http.Request, cook *sessions.Sessio
 	func CookieAdd(w http.ResponseWriter, r *http.Request, uid string, filename string) (string, bool) {
 		session, err := store.Get(r, "session_name")
 		if err != nil {
-			fmt.Println("error add file:", err)
+			logrus.Debug("error add file:", err)
 			return "", true
 		}
 		if uid, ok := session.Values["nametoid"].(map[string]string)[filename]; ok {
@@ -46,7 +46,7 @@ func GenerateNewId(w http.ResponseWriter, r *http.Request, cook *sessions.Sessio
 		session.Values["nametoid"].(map[string]string)[filename] = uid
 		err = session.Save(r, w)
 		if err != nil {
-			fmt.Println("error saving session:", err)
+			logrus.Debug("error saving session:", err)
 			return "", true
 		}
 		return "", true
@@ -55,21 +55,21 @@ func GenerateNewId(w http.ResponseWriter, r *http.Request, cook *sessions.Sessio
 func CookieDeleteAll(w http.ResponseWriter, r *http.Request) {
 	session, err := store.Get(r, "session_name")
 	if err != nil {
-		fmt.Println("error delete file:", err)
+		logrus.Error("error trying delete file:", err)
 		return
 	}
 	session.Values["filename"] = []string{}
 	session.Values["nametoid"] = map[string]string{}
 	err = session.Save(r, w)
 	if err != nil {
-		fmt.Println("error saving session:", err)
+		logrus.Error("error saving session:", err)
 	}
 }
 
 func CookieGet(r *http.Request) *sessions.Session {
 	session, err := store.Get(r, "session_name")
 	if err != nil {
-		fmt.Println("error getting session:", err)
+		logrus.Error("error getting session:", err)
 		return nil
 	}
 	return session

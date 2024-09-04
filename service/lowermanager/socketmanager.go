@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 	"webapp/util"
+
+	"github.com/sirupsen/logrus"
 )
 
 type Socket struct {
@@ -26,14 +28,14 @@ func NewSocketManager() *SocketManager {
 }
 
 func NewSocket() *Socket {
-	fmt.Println("waiting python server up")
+	logrus.Debug("waiting python server up")
 	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", util.ConfigMap["socket"]["host"], util.ConfigMap["socket"]["port"]))
 	for err != nil {
 		time.Sleep(10 * time.Second)
-		fmt.Println("waiting python server up")
+		logrus.Debug("waiting python server up")
 		conn, err = net.Dial("tcp", fmt.Sprintf("%s:%s", util.ConfigMap["socket"]["host"], util.ConfigMap["socket"]["port"]))
 	}
-	fmt.Println("connect server success")
+	logrus.Debug("connect server success")
 	return &Socket{
 		Socket: &conn,
 	}
@@ -46,15 +48,15 @@ func (s *Socket) NewPythonServerListener(handlefunc func(int, []byte)) {
 		for {
 			line, err := reader.ReadString('\n')
 			if err != nil {
-				fmt.Println("lost connection to python server:", err)
+				logrus.Debug("lost connection to python server:", err)
 				for i := 1; ; i++ {
 					if i == 10 {
 						panic("cannot reconnect to python server")
 					}
-					fmt.Println("reconnect to python server:", i)
+					logrus.Debug("reconnect to python server:", i)
 					conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", util.ConfigMap["socket"]["host"], util.ConfigMap["socket"]["port"]))
 					if err != nil {
-						fmt.Printf("%v-th conn server failed, err:%v\n", i, err)
+						logrus.Debug("%v-th conn server failed, err:%v\n", i, err)
 						time.Sleep(10 * time.Second)
 						continue
 					}
@@ -62,10 +64,10 @@ func (s *Socket) NewPythonServerListener(handlefunc func(int, []byte)) {
 					reader = bufio.NewReader(*s.Socket)
 					break
 				}
-				fmt.Println("reconnect to python server success")
+				logrus.Debug("reconnect to python server success")
 				continue
 			}
-			fmt.Println("read from python server:", line)
+			logrus.Debug("read from python server:", line)
 			handlefunc(len(line), []byte(line))
 		}
 	}()
@@ -74,7 +76,7 @@ func (s *Socket) NewPythonServerListener(handlefunc func(int, []byte)) {
 func (s *Socket) WriteJSON(v interface{}) {
 	jsondump, err := json.Marshal(v)
 	if err != nil {
-		fmt.Println("json dump failed:", err)
+		logrus.Error("json dump failed:", err)
 		return
 	}
 	jsondump = append(jsondump, '\n')

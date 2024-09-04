@@ -3,6 +3,7 @@ package util
 import (
 	"fmt"
 
+	"github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
 )
 
@@ -12,7 +13,7 @@ func init() {
 	var err error
 	ConfigMap, err = IniToMap("config.ini")
 	if err != nil {
-		panic(fmt.Sprintf("启动ini失败:%s", err))
+		logrus.Panic(fmt.Sprintf("启动ini失败:%s", err))
 	}
 }
 
