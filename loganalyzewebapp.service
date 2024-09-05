@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 ExecStartPre=/bin/systemctl start loganalyzepythonserver.service
-ExecStart=/home/mengqingxin/go/bin/go run /home/mengqingxin/webapplication/web.go
+ExecStart=/bin/su - mengqingxin -c "cd webapplication && /home/mengqingxin/go/bin/go run /home/mengqingxin/webapplication/web.go"
 ExecStopPost=/bin/systemctl stop loganalyzepythonserver.service
 Restart=always
 User=root
