@@ -1,0 +1,15 @@
+[Unit]
+Description=Golang Web Application
+After=network.target
+
+[Service]
+ExecStartPre=/bin/systemctl start loganalyzepythonserver.service
+ExecStart=/home/mengqingxin/go/bin/go run /home/mengqingxin/webapplication/web.go
+ExecStopPost=/bin/systemctl stop loganalyzepythonserver.service
+Restart=always
+User=root
+Group=root
+WorkingDirectory=/home/mengqingxin/webapplication
+
+[Install]
+WantedBy=multi-user.target

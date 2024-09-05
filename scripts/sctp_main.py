@@ -8,10 +8,6 @@ import glob
 import gzip
 import sys
 import logging
-
-
-
-# mode 0 is single thread， mode 1 is multithread
 def run(filelocation, mode=0):
     filter1 = "s1ap.MME_UE_S1AP_ID"
     filter2 = "s1ap.ENB_UE_S1AP_ID"

@@ -1,0 +1,13 @@
+[Unit]
+Description=Python Application
+After=network.target
+
+[Service]
+ExecStart=/home/mengqingxin/miniconda3/bin/python /home/mengqingxin/webapplication/scripts/server.py
+Restart=always
+User=mengqingxin
+Group=mengqingxin
+WorkingDirectory=/home/mengqingxin/webapplication
+
+[Install]
+WantedBy=multi-user.target

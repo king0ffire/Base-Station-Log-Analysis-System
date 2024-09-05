@@ -3,7 +3,6 @@ package service
 import (
 	"bufio"
 	"fmt"
-	"os"
 	"path/filepath"
 	"webapp/dataaccess"
 	"webapp/service/lowermanager"
@@ -94,9 +93,14 @@ func ParsedbgFile[sessionidtype comparable, fileidtype comparable, socketidtype 
 	}
 	logrus.Debugf("checking file task mode for file: %v", fileuid)
 	if dbgtaskstatus.Calltype == util.Cmd {
-		outpipe, _ := dbgtaskstatus.Cmd.StdoutPipe()
-		dbgtaskstatus.Cmd.Stderr = os.Stderr
-
+		stdoutpipe, err := dbgtaskstatus.Cmd.StdoutPipe()
+		if err != nil {
+			logrus.Errorf("error in getting stdout pipe for file: %v", fileuid)
+		}
+		stderrpipe, err := dbgtaskstatus.Cmd.StderrPipe()
+		if err != nil {
+			logrus.Errorf("error in getting stderr pipe for file: %v", fileuid)
+		}
 		currentfilestatus.Dbgstatus.State = util.Created
 		usersession.FileStatusManager.Set(fileuid, currentfilestatus)
 		pythonstatusmanager.Start(currentfilestatus, util.Dbg)
@@ -110,7 +114,7 @@ func ParsedbgFile[sessionidtype comparable, fileidtype comparable, socketidtype 
 				dbgtaskstatus.Cmd.Wait()
 				dbgtaskstatus.State = util.Idle
 			}()
-			scanner := bufio.NewScanner(outpipe)
+			scanner := bufio.NewScanner(stdoutpipe)
 			for scanner.Scan() {
 				logrus.Debug("python outputs:", scanner.Text())
 				if scanner.Text() == "dbg analysis success" {
@@ -121,6 +125,12 @@ func ParsedbgFile[sessionidtype comparable, fileidtype comparable, socketidtype 
 			}
 			currentfilestatus.Dbgstatus.State = util.Failed
 			AnnounceAllSocketsInUser(userid, usersession)
+		}()
+		go func() {
+			scanner := bufio.NewScanner(stderrpipe)
+			for scanner.Scan() {
+				logrus.Info("python error outputs:", scanner.Text())
+			}
 		}()
 	} else if dbgtaskstatus.Calltype == util.Rpc {
 		logrus.Debug("the rpc call preparation: ", fileuid)

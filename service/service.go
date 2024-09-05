@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 	"webapp/dataaccess"
@@ -86,21 +85,27 @@ func ParseidsFilebyCmd[sessionidtype comparable, fileidtype comparable, websocke
 		logrus.Debug("didnot find the file")
 		return
 	}
-
-	cmds, _ := pythonprocessesmanager.Get(currentfilestatus)
-	idscmd := cmds[util.Sctp]
-	removecachecmd := cmds[util.Delete]
-
-	outpipe, _ := idscmd.Cmd.StdoutPipe()
-	idscmd.Cmd.Stderr = os.Stderr
-
 	currentfilestatus.Sctpstatus.Lock.Lock()
 	if currentfilestatus.Dbgstatus.State != util.Finished {
 		logrus.Info("the dbglog analysis is not finished, should wait")
+		currentfilestatus.Sctpstatus.Lock.Unlock()
 		return
 	}
 	currentfilestatus.Sctpstatus.State = util.Created
 	currentfilestatus.Sctpstatus.Lock.Unlock()
+	cmds, _ := pythonprocessesmanager.Get(currentfilestatus)
+	idscmd := cmds[util.Sctp]
+	removecachecmd := cmds[util.Delete]
+
+	stdoutpipe, err := idscmd.Cmd.StdoutPipe()
+	if err != nil {
+		logrus.Error("get stdout pipe:", err)
+	}
+	stderrpipe, err := idscmd.Cmd.StderrPipe()
+	if err != nil {
+		logrus.Error("get stderr pipe:", err)
+	}
+
 	usersession.FileStatusManager.Set(fileuid, currentfilestatus)
 	if err := idscmd.Cmd.Start(); err != nil {
 		logrus.Error("start python fail:", err)
@@ -118,7 +123,7 @@ func ParseidsFilebyCmd[sessionidtype comparable, fileidtype comparable, websocke
 		}()
 		currentfilestatus.Sctpstatus.State = util.Running
 		idscmd.State = util.Running
-		scanner := bufio.NewScanner(outpipe)
+		scanner := bufio.NewScanner(stdoutpipe)
 		scanner.Scan()
 		logrus.Debug("Received first line of ids analysis:", stringuid, ":", scanner.Text())
 		intText, err := strconv.Atoi(scanner.Text())
@@ -156,6 +161,12 @@ func ParseidsFilebyCmd[sessionidtype comparable, fileidtype comparable, websocke
 		currentfilestatus.Sctpstatus.State = util.Failed
 		AnnounceAllSocketsInUser(userid, usersession)
 		//走到这里则python已退出
+	}()
+	go func() {
+		scanner := bufio.NewScanner(stderrpipe)
+		for scanner.Scan() {
+			logrus.Info("python error:", scanner.Text())
+		}
 	}()
 }
 

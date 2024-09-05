@@ -39,9 +39,9 @@ func NewPythonCmdStatusManager[useridtype comparable, fileidtype comparable]() *
 }
 
 func (m *PythonCmdStatusManager[useridtype, fileidtype]) Add(fileuid fileidtype, filelocation string) {
-	dbgcmd := exec.Command("python", "./scripts/dbg_main.py", filelocation, "1")
-	idscmd := exec.Command("python", "./scripts/sctp_main.py", filelocation, "1")
-	removecachecmd := exec.Command("python", "./scripts/remove_cache.py", filelocation, "1")
+	dbgcmd := exec.Command(util.ConfigMap["python"]["python_path"], "./scripts/dbg_main.py", filelocation, "1")
+	idscmd := exec.Command(util.ConfigMap["python"]["python_path"], "./scripts/sctp_main.py", filelocation, "1")
+	removecachecmd := exec.Command(util.ConfigMap["python"]["python_path"], "./scripts/remove_cache.py", filelocation, "1")
 
 	m.Lock.Lock()
 	m.PythonStatus[fileuid] = make(map[util.Task]*PythonTaskStatus[useridtype, fileidtype])
@@ -106,8 +106,8 @@ func NewPythonServiceStatusManager[useridtype comparable, fileidtype comparable]
 
 func (m *PythonServiceStatusManager[useridtype, fileidtype]) Add(filestatus *lowermanager.FileStatus[useridtype, fileidtype], filelocation string) {
 	//dbgcmd := exec.Command("python", "./scripts/dbg_main.py", filelocation, "0")
-	idscmd := exec.Command("python", "./scripts/sctp_main.py", filelocation, "1")
-	removecachecmd := exec.Command("python", "./scripts/remove_cache.py", filelocation, "1")
+	idscmd := exec.Command(util.ConfigMap["python"]["python_path"], "./scripts/sctp_main.py", filelocation, "1")
+	removecachecmd := exec.Command(util.ConfigMap["python"]["python_path"], "./scripts/remove_cache.py", filelocation, "1")
 
 	m.lock.Lock()
 	m.FileTasks[filestatus.Uid] = make(map[util.Task]*PythonTaskStatus[useridtype, fileidtype])
