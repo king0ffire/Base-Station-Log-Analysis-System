@@ -1,6 +1,6 @@
 [Unit]
 Description=Python Application
-After=network.target
+After=network.target  mysqld
 
 [Service]
 ExecStart=/home/mengqingxin/miniconda3/bin/python /home/mengqingxin/webapplication/scripts/server.py

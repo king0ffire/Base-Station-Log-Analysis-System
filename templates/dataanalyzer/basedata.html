@@ -40,7 +40,7 @@
       var dbgstatus = value["Dbgstatus"];
       var idsstatus = value["Sctpstatus"];
 
-      cell1.innerHTML = uid;
+      cell1.innerHTML = filename;
       cell1.setAttribute("class", "text-center")
 
       if (dbgstatus["State"] == "Failed") {
@@ -70,7 +70,11 @@
         window.location.href = "/results/dbg?fileid=" + uid
       })
       button1.innerHTML = "查看dbglog文件统计";
-      if (idsstatus["State"] == "Finished") {
+      if (dbgstatus["State"]!="Finished")
+      {
+        button2.setAttribute("class", "btn btn-info")
+        button2.innerHTML = "请等待dbglog分析完成";
+      }else if (idsstatus["State"] == "Finished") {
         button2.setAttribute("class", "btn btn-success")
         button2.addEventListener("click", function () {
           window.location.href = "/results/ids?fileid=" + uid
@@ -96,6 +100,7 @@
       var jsondata = JSON.parse(e.data);
       tbody = document.createElement('tbody')
       const table = document.getElementById("table")
+      jsondata.sort((a,b)=>a.Uid.localeCompare(b.Uid))
       jsondata.forEach(updateonetablerow);
       table.replaceChild(tbody, table.getElementsByTagName("tbody")[0]);
     };

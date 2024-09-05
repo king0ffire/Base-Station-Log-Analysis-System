@@ -37,11 +37,11 @@ func init() {
 	defer cancelfunc()
 	_, err = db.ExecContext(ctx, "drop database if exists webapp")
 	if err != nil {
-		logrus.Errorf("Error %s when drop DB\n", err)
+		logrus.Fatalf("Error %s when drop DB\n", err)
 	}
 	_, err = db.ExecContext(ctx, "create database webapp")
 	if err != nil {
-		logrus.Errorf("Error %s when creating DB\n", err)
+		logrus.Fatalf("Error %s when creating DB\n", err)
 	}
 
 	db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s",
@@ -58,13 +58,13 @@ func init() {
 	_, err = db.ExecContext(ctx,
 		"create table userinfo (id int auto_increment primary key, userid VARCHAR(255), unique(userid))")
 	if err != nil {
-		logrus.Errorf("Error %s when creating table\n", err)
+		logrus.Fatalf("Error %s when creating table\n", err)
 		return
 	}
 	_, err = db.ExecContext(ctx,
 		"create table fileinfo (id int auto_increment primary key, fileid VARCHAR(255),unique(fileid), userid VARCHAR(255), foreign key (userid) references userinfo(userid) on delete cascade)")
 	if err != nil {
-		logrus.Errorf("Error %s when creating table\n", err)
+		logrus.Fatalf("Error %s when creating table\n", err)
 		return
 	}
 	logrus.Debug("database is inited")

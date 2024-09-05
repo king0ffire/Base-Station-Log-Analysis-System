@@ -7,7 +7,6 @@ import (
 
 	"net/http"
 	"strconv"
-	"time"
 	"webapp/dataaccess"
 	"webapp/service/lowermanager"
 	"webapp/service/topmanager"
@@ -52,7 +51,11 @@ func PushQueueAndDeleteOld[sessionidtype comparable, fileidtype comparable, sock
 	pythonprocessesmanager topmanager.PythonStatusManager[sessionidtype, fileidtype],
 	cachequeue *topmanager.ServerCacheQueue[sessionidtype, fileidtype],
 	fileuid fileidtype, uploadpath string, userid sessionidtype, filestatus *lowermanager.FileStatus[sessionidtype, fileidtype]) {
-	filetobedeleted := cachequeue.PushAndPopWhenFull(filestatus, 5)
+	cache_queue_size, err := strconv.Atoi(util.ConfigMap["webapp"]["cache_queue_size"])
+	if err != nil {
+		logrus.Fatal("error parsing cache_queue_size:", err)
+	}
+	filetobedeleted := cachequeue.PushAndPopWhenFull(filestatus, cache_queue_size)
 	logrus.Debug(fileuid, " added to cachequeue, current length: ", cachequeue.Len())
 	if filetobedeleted != nil {
 		filetobedeleted.Dbgstatus.Lock.Lock()
@@ -64,7 +67,24 @@ func PushQueueAndDeleteOld[sessionidtype comparable, fileidtype comparable, sock
 		logrus.Debug("deleting expired file: ", filetobedeleted.Uid)
 		usersession, ok := sessionmanager.Get(filetobedeleted.Useruid)
 		if !ok {
-			logrus.Debug("didnot find the user owning file to be deleted")
+			logrus.Debug("didnot find the user owning file to be deleted, clean all local data of it")
+			pythonprocessesmanager.Stop(filestatus)
+			pythonprocessesmanager.Delete(filestatus)
+			logrus.Debugf("file %v removed from python process manager", filestatus.Uid)
+			cachequeue.Delete(filestatus.Uid)
+			logrus.Debugf("file %v removed from cache queue", filestatus.Uid)
+			dataaccess.DatabaseDeleteFileinfo(filestatus.Uid)
+			dataaccess.DatabaseDeletedbgitemstable(filestatus.Uid)
+			logrus.Debugf("file %v deleted from database", filestatus.Uid)
+			err := dataaccess.DeleteDirFromLocal(uploadpath, fmt.Sprintf("%v", filestatus.Uid))
+			if err != nil {
+				logrus.Errorf("delete %v directory error:%s\n", filestatus.Uid, err)
+			}
+			err = dataaccess.DeleteFileFromLocal(uploadpath, fmt.Sprintf("%v", filestatus.Uid))
+			if err != nil {
+				logrus.Errorf("delete %v file error:%s\n", filestatus.Uid, err)
+			}
+			return
 		}
 		ForceStopAndDeleteFile(filetobedeleted, uploadpath, usersession, pythonprocessesmanager, cachequeue)
 	}
@@ -242,11 +262,12 @@ func NewUserintoMemory[socketidtype lowermanager.WebSocketID, fileidtype compara
 	}
 	sessionmanager.Add(userid)
 	dataaccess.DatabaseAddUserinfo(userid)
-	time.AfterFunc(48*time.Hour, func() {
-		dataaccess.DatabaseDeleteUserinfo(userid)
-		sessionmanager.Delete(userid)
-		logrus.Debug("Delete User since expired:", userid)
-	})
+	/*
+		time.AfterFunc(48*time.Hour, func() {
+			dataaccess.DatabaseDeleteUserinfo(userid)
+			sessionmanager.Delete(userid)
+			logrus.Debug("Delete User since expired:", userid)
+		})*/
 	logrus.Debug("Add User:", userid)
 }
 
