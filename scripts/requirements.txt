@@ -1,4 +1,4 @@
-pyshark
+git+https://github.com/KimiNewt/pyshark.git
 pandas
 openpyxl
 mysql-connector-python
