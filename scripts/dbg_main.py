@@ -12,7 +12,7 @@ import glob
 import sys
 import logging
 
-@profile
+
 # mode 0 is single thread， mode 1 is multithread
 def run(filelocation, mode=0):
     extracteddir = os.path.splitext(os.path.splitext(filelocation)[0])[0]

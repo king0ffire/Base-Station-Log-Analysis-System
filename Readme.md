@@ -1,13 +1,28 @@
+# Prerequisites
+
+tshark
+
+mysql
+
+golang>=1.22.5
+
+python=3.11
+
 # How to Run
 
-Change `config.ini` for your server
+    cd ~
+    git clone https://github.com/king0ffire/webapp.git
+    git clone https://github.com/KimiNewt/pyshark.git
+    cd pyshark/src
+    pip setup.py install
+    cd ../webapp
+    pip install -r ./scripts/requirements.txt
 
-Run mysql server
 
-Install requirements.txt for python
 
-`go get` requirements for golang
+Adapt `config.ini`, `loganalyzepythonserver.service` and `loganalyzewebapp.service` to your server
 
-`python ./scripts/main.py`
-
-`go run ./main.go`
+    sudo cp ./loganalyzepythonserver.service /etc/systemd/system/
+    sudo cp ./loganalyzewebapp.service /etc/systemd/system/
+    sudo systemctl daemon-reload
+    sudo systemctl start loganalyzewebapp.service

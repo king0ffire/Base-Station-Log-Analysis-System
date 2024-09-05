@@ -13,13 +13,12 @@ import csv
 import glob
 import sys
 import logging
-from line_profiler import profile
 import configparser
 
 config=configparser.ConfigParser()
 config.read("config.ini")
 
-@profile
+
 def run(filelocation, mode=0):
     extracteddir = os.path.splitext(os.path.splitext(filelocation)[0])[0]
     fileuid=os.path.basename(extracteddir)

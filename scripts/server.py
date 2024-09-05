@@ -11,13 +11,12 @@ import sys
 import tarfile
 import json
 import time
-from line_profiler import profile
 import configparser
 import traceback
 
 
 
-@profile
+
 def run(filemeta, dbconn, cachelocation, mode=0):
     fileuid = filemeta["fileuid"]
     filelocation = os.path.join(cachelocation, fileuid + ".tar.gz")

@@ -3,7 +3,6 @@ import logging
 import os
 import queue
 import threading
-from line_profiler import profile
 import traceback
 
 logger=logging.getLogger(__name__)
