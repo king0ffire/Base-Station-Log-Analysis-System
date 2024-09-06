@@ -12,6 +12,7 @@ import (
 	"strings"
 	"webapp/dataaccess"
 	"webapp/service"
+	"webapp/service/lowermanager"
 	"webapp/service/topmanager"
 	"webapp/util"
 
@@ -24,7 +25,7 @@ var uploadpath = util.ConfigMap["file"]["cache_path"]
 var localport = fmt.Sprintf(":%s", util.ConfigMap["webapp"]["port"])
 
 var sessionmanager = topmanager.NewSessionStatusManager[string, string, *websocket.Conn]()
-var cachequeue = &topmanager.ServerCacheQueue[string, string]{}
+var cachequeue = &lowermanager.ServerCacheQueue[string, string]{}
 var pythonstatusmanager *topmanager.PythonServiceStatusManager[string, string]
 
 func init() {
