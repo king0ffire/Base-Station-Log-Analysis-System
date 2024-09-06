@@ -14,29 +14,19 @@ import (
 type PythonStatusManager[useridtype comparable, fileidtype comparable] interface {
 	Add(*models.FileStatus[useridtype, fileidtype], string)
 	Delete(*models.FileStatus[useridtype, fileidtype])
-	Get(*models.FileStatus[useridtype, fileidtype]) (map[util.Task]*PythonTaskStatus[useridtype, fileidtype], bool)
+	Get(*models.FileStatus[useridtype, fileidtype]) (map[util.Task]*models.PythonTaskStatus[useridtype, fileidtype], bool)
 	SetState(*models.FileStatus[useridtype, fileidtype], util.Task, util.State) bool
 	Stop(*models.FileStatus[useridtype, fileidtype])
 	Start(*models.FileStatus[useridtype, fileidtype], util.Task) error
 }
 
-type PythonTaskStatus[useruidtype comparable, fileidtype comparable] struct {
-	Calltype    util.Calltype //"cmd", "rpc"
-	Task        util.Task
-	State       util.State // idle, running
-	Cmd         *exec.Cmd
-	Uid         fileidtype
-	Useruid     useruidtype
-	Createdtime string
-}
-
 type PythonCmdStatusManager[useridtype comparable, fileidtype comparable] struct {
 	Lock         sync.RWMutex
-	PythonStatus map[fileidtype]map[util.Task]*PythonTaskStatus[useridtype, fileidtype] //一个file下有三个cmd，这三个cmd对应不同的状态
+	PythonStatus map[fileidtype]map[util.Task]*models.PythonTaskStatus[useridtype, fileidtype] //一个file下有三个cmd，这三个cmd对应不同的状态
 }
 
 func NewPythonCmdStatusManager[useridtype comparable, fileidtype comparable]() *PythonCmdStatusManager[useridtype, fileidtype] {
-	return &PythonCmdStatusManager[useridtype, fileidtype]{PythonStatus: make(map[fileidtype]map[util.Task]*PythonTaskStatus[useridtype, fileidtype])}
+	return &PythonCmdStatusManager[useridtype, fileidtype]{PythonStatus: make(map[fileidtype]map[util.Task]*models.PythonTaskStatus[useridtype, fileidtype])}
 }
 
 func (m *PythonCmdStatusManager[useridtype, fileidtype]) Add(fileuid fileidtype, filelocation string) {
@@ -45,10 +35,10 @@ func (m *PythonCmdStatusManager[useridtype, fileidtype]) Add(fileuid fileidtype,
 	removecachecmd := exec.Command(util.ConfigMap["python"]["python_path"], "./scripts/remove_cache.py", filelocation, "1")
 
 	m.Lock.Lock()
-	m.PythonStatus[fileuid] = make(map[util.Task]*PythonTaskStatus[useridtype, fileidtype])
-	m.PythonStatus[fileuid][util.Dbg] = &PythonTaskStatus[useridtype, fileidtype]{Calltype: util.Cmd, Cmd: dbgcmd, State: util.Idle, Uid: fileuid}
-	m.PythonStatus[fileuid][util.Sctp] = &PythonTaskStatus[useridtype, fileidtype]{Calltype: util.Cmd, Cmd: idscmd, State: util.Idle, Uid: fileuid}
-	m.PythonStatus[fileuid][util.Delete] = &PythonTaskStatus[useridtype, fileidtype]{Calltype: util.Cmd, Cmd: removecachecmd, State: util.Idle, Uid: fileuid}
+	m.PythonStatus[fileuid] = make(map[util.Task]*models.PythonTaskStatus[useridtype, fileidtype])
+	m.PythonStatus[fileuid][util.Dbg] = &models.PythonTaskStatus[useridtype, fileidtype]{Calltype: util.Cmd, Cmd: dbgcmd, State: util.Idle, Uid: fileuid}
+	m.PythonStatus[fileuid][util.Sctp] = &models.PythonTaskStatus[useridtype, fileidtype]{Calltype: util.Cmd, Cmd: idscmd, State: util.Idle, Uid: fileuid}
+	m.PythonStatus[fileuid][util.Delete] = &models.PythonTaskStatus[useridtype, fileidtype]{Calltype: util.Cmd, Cmd: removecachecmd, State: util.Idle, Uid: fileuid}
 	m.Lock.Unlock()
 }
 
@@ -59,7 +49,7 @@ func (m *PythonCmdStatusManager[useridtype, fileidtype]) Delete(fileid fileidtyp
 	m.Lock.Unlock()
 }
 
-func (m *PythonCmdStatusManager[useridtype, fileidtype]) Get(uid fileidtype) (map[util.Task]*PythonTaskStatus[useridtype, fileidtype], bool) {
+func (m *PythonCmdStatusManager[useridtype, fileidtype]) Get(uid fileidtype) (map[util.Task]*models.PythonTaskStatus[useridtype, fileidtype], bool) {
 	m.Lock.RLock()
 	v, ok := m.PythonStatus[uid]
 	m.Lock.RUnlock()
@@ -95,12 +85,12 @@ func (m *PythonCmdStatusManager[useridtype, fileidtype]) Forcestop(fileid fileid
 
 type PythonServiceStatusManager[useridtype comparable, fileidtype comparable] struct {
 	lock                      sync.RWMutex
-	FileTasks                 map[fileidtype]map[util.Task]*PythonTaskStatus[useridtype, fileidtype] //一个file下有三个cmd，这三个cmd对应不同的状态
+	FileTasks                 map[fileidtype]map[util.Task]*models.PythonTaskStatus[useridtype, fileidtype] //一个file下有三个cmd，这三个cmd对应不同的状态
 	PythonServerSocketManager *lowermanager.SocketManager
 }
 
 func NewPythonServiceStatusManager[useridtype comparable, fileidtype comparable]() *PythonServiceStatusManager[useridtype, fileidtype] {
-	m := &PythonServiceStatusManager[useridtype, fileidtype]{FileTasks: make(map[fileidtype]map[util.Task]*PythonTaskStatus[useridtype, fileidtype])}
+	m := &PythonServiceStatusManager[useridtype, fileidtype]{FileTasks: make(map[fileidtype]map[util.Task]*models.PythonTaskStatus[useridtype, fileidtype])}
 	m.PythonServerSocketManager = lowermanager.NewSocketManager()
 	return m
 }
@@ -111,10 +101,10 @@ func (m *PythonServiceStatusManager[useridtype, fileidtype]) Add(filestatus *mod
 	removecachecmd := exec.Command(util.ConfigMap["python"]["python_path"], "./scripts/remove_cache.py", filelocation, "1")
 
 	m.lock.Lock()
-	m.FileTasks[filestatus.Uid] = make(map[util.Task]*PythonTaskStatus[useridtype, fileidtype])
-	m.FileTasks[filestatus.Uid][util.Dbg] = &PythonTaskStatus[useridtype, fileidtype]{Calltype: util.Rpc, Cmd: nil, State: util.Idle, Uid: filestatus.Uid, Useruid: filestatus.Useruid}
-	m.FileTasks[filestatus.Uid][util.Sctp] = &PythonTaskStatus[useridtype, fileidtype]{Calltype: util.Cmd, Cmd: idscmd, State: util.Idle, Uid: filestatus.Uid, Useruid: filestatus.Useruid}
-	m.FileTasks[filestatus.Uid][util.Delete] = &PythonTaskStatus[useridtype, fileidtype]{Calltype: util.Cmd, Cmd: removecachecmd, State: util.Idle, Uid: filestatus.Uid, Useruid: filestatus.Useruid}
+	m.FileTasks[filestatus.Uid] = make(map[util.Task]*models.PythonTaskStatus[useridtype, fileidtype])
+	m.FileTasks[filestatus.Uid][util.Dbg] = &models.PythonTaskStatus[useridtype, fileidtype]{Calltype: util.Rpc, Cmd: nil, State: util.Idle, Uid: filestatus.Uid, Useruid: filestatus.Useruid}
+	m.FileTasks[filestatus.Uid][util.Sctp] = &models.PythonTaskStatus[useridtype, fileidtype]{Calltype: util.Cmd, Cmd: idscmd, State: util.Idle, Uid: filestatus.Uid, Useruid: filestatus.Useruid}
+	m.FileTasks[filestatus.Uid][util.Delete] = &models.PythonTaskStatus[useridtype, fileidtype]{Calltype: util.Cmd, Cmd: removecachecmd, State: util.Idle, Uid: filestatus.Uid, Useruid: filestatus.Useruid}
 	m.lock.Unlock()
 }
 
@@ -124,7 +114,7 @@ func (m *PythonServiceStatusManager[useridtype, fileidtype]) Delete(filestatus *
 	m.lock.Unlock()
 }
 
-func (m *PythonServiceStatusManager[useridtype, fileidtype]) Get(filestatus *models.FileStatus[useridtype, fileidtype]) (map[util.Task]*PythonTaskStatus[useridtype, fileidtype], bool) {
+func (m *PythonServiceStatusManager[useridtype, fileidtype]) Get(filestatus *models.FileStatus[useridtype, fileidtype]) (map[util.Task]*models.PythonTaskStatus[useridtype, fileidtype], bool) {
 	m.lock.RLock()
 	v, ok := m.FileTasks[filestatus.Uid]
 	m.lock.RUnlock()
