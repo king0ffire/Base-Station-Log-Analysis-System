@@ -20,7 +20,7 @@ python=3.11
 
 
 
-Adapt `config.ini`, `loganalyzepythonserver.service` and `loganalyzewebapp.service` to your server
+Adapt `config.ini`, `loganalyzepythonserver.service` and `loganalyzewebapp.service` to your server, then:
 
     sudo cp ./loganalyzepythonserver.service /etc/systemd/system/
     sudo cp ./loganalyzewebapp.service /etc/systemd/system/

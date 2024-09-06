@@ -8,6 +8,10 @@ import glob
 import gzip
 import sys
 import logging
+
+
+
+# mode 0 is single thread， mode 1 is multithread
 def run(filelocation, mode=0):
     filter1 = "s1ap.MME_UE_S1AP_ID"
     filter2 = "s1ap.ENB_UE_S1AP_ID"
@@ -40,7 +44,7 @@ def uncaught_exception(exctype, value, tb):
     logger.error("Uncaught exception", exc_info=(exctype, value, tb))
     queue_listener.stop()
     exit(0)
-    
+
 def configure_logger(location:str, level:int=logging.DEBUG):
     logger = logging.getLogger()
     logger.setLevel(level)
@@ -78,7 +82,7 @@ if __name__ == "__main__":
     logger.info("start logger")
     logger.info("Current Working Directory: %s", os.getcwd())
     logger.info("Current File Dirctory: %s", os.path.abspath("."))
-    from ids_pyshark import sctpanalysis
+    from core.sctp import sctpanalysis
     
     run(sys.argv[1], mode=int(sys.argv[2]))
     

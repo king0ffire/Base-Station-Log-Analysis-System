@@ -5,18 +5,19 @@ import (
 	"os/exec"
 	"sync"
 	"webapp/service/lowermanager"
+	"webapp/service/models"
 	"webapp/util"
 
 	"github.com/sirupsen/logrus"
 )
 
 type PythonStatusManager[useridtype comparable, fileidtype comparable] interface {
-	Add(*lowermanager.FileStatus[useridtype, fileidtype], string)
-	Delete(*lowermanager.FileStatus[useridtype, fileidtype])
-	Get(*lowermanager.FileStatus[useridtype, fileidtype]) (map[util.Task]*PythonTaskStatus[useridtype, fileidtype], bool)
-	SetState(*lowermanager.FileStatus[useridtype, fileidtype], util.Task, util.State) bool
-	Stop(*lowermanager.FileStatus[useridtype, fileidtype])
-	Start(*lowermanager.FileStatus[useridtype, fileidtype], util.Task) error
+	Add(*models.FileStatus[useridtype, fileidtype], string)
+	Delete(*models.FileStatus[useridtype, fileidtype])
+	Get(*models.FileStatus[useridtype, fileidtype]) (map[util.Task]*PythonTaskStatus[useridtype, fileidtype], bool)
+	SetState(*models.FileStatus[useridtype, fileidtype], util.Task, util.State) bool
+	Stop(*models.FileStatus[useridtype, fileidtype])
+	Start(*models.FileStatus[useridtype, fileidtype], util.Task) error
 }
 
 type PythonTaskStatus[useruidtype comparable, fileidtype comparable] struct {
@@ -104,7 +105,7 @@ func NewPythonServiceStatusManager[useridtype comparable, fileidtype comparable]
 	return m
 }
 
-func (m *PythonServiceStatusManager[useridtype, fileidtype]) Add(filestatus *lowermanager.FileStatus[useridtype, fileidtype], filelocation string) {
+func (m *PythonServiceStatusManager[useridtype, fileidtype]) Add(filestatus *models.FileStatus[useridtype, fileidtype], filelocation string) {
 	//dbgcmd := exec.Command("python", "./scripts/dbg_main.py", filelocation, "0")
 	idscmd := exec.Command(util.ConfigMap["python"]["python_path"], "./scripts/sctp_main.py", filelocation, "1")
 	removecachecmd := exec.Command(util.ConfigMap["python"]["python_path"], "./scripts/remove_cache.py", filelocation, "1")
@@ -117,20 +118,20 @@ func (m *PythonServiceStatusManager[useridtype, fileidtype]) Add(filestatus *low
 	m.lock.Unlock()
 }
 
-func (m *PythonServiceStatusManager[useridtype, fileidtype]) Delete(filestatus *lowermanager.FileStatus[useridtype, fileidtype]) {
+func (m *PythonServiceStatusManager[useridtype, fileidtype]) Delete(filestatus *models.FileStatus[useridtype, fileidtype]) {
 	m.lock.Lock()
 	delete(m.FileTasks, filestatus.Uid)
 	m.lock.Unlock()
 }
 
-func (m *PythonServiceStatusManager[useridtype, fileidtype]) Get(filestatus *lowermanager.FileStatus[useridtype, fileidtype]) (map[util.Task]*PythonTaskStatus[useridtype, fileidtype], bool) {
+func (m *PythonServiceStatusManager[useridtype, fileidtype]) Get(filestatus *models.FileStatus[useridtype, fileidtype]) (map[util.Task]*PythonTaskStatus[useridtype, fileidtype], bool) {
 	m.lock.RLock()
 	v, ok := m.FileTasks[filestatus.Uid]
 	m.lock.RUnlock()
 	return v, ok
 }
 
-func (m *PythonServiceStatusManager[useridtype, fileidtype]) SetState(filestatus *lowermanager.FileStatus[useridtype, fileidtype], task util.Task, state util.State) bool {
+func (m *PythonServiceStatusManager[useridtype, fileidtype]) SetState(filestatus *models.FileStatus[useridtype, fileidtype], task util.Task, state util.State) bool {
 	m.lock.Lock()
 	v, ok := m.FileTasks[filestatus.Uid][task]
 	if ok {
@@ -139,7 +140,7 @@ func (m *PythonServiceStatusManager[useridtype, fileidtype]) SetState(filestatus
 	m.lock.Unlock()
 	return ok
 }
-func (m *PythonServiceStatusManager[useridtype, fileidtype]) Stop(filestatus *lowermanager.FileStatus[useridtype, fileidtype]) {
+func (m *PythonServiceStatusManager[useridtype, fileidtype]) Stop(filestatus *models.FileStatus[useridtype, fileidtype]) {
 	logrus.Debug("forcing stop:", filestatus.Uid)
 	taskstatus, ok := m.Get(filestatus)
 	if !ok {
@@ -171,7 +172,7 @@ func (m *PythonServiceStatusManager[useridtype, fileidtype]) Stop(filestatus *lo
 	}
 }
 
-func (m *PythonServiceStatusManager[useridtype, fileidtype]) Start(filestatus *lowermanager.FileStatus[useridtype, fileidtype], task util.Task) error {
+func (m *PythonServiceStatusManager[useridtype, fileidtype]) Start(filestatus *models.FileStatus[useridtype, fileidtype], task util.Task) error {
 	currenttask, ok := m.FileTasks[filestatus.Uid][task]
 	if !ok {
 		logrus.Debug("task not found:", filestatus.Uid, ":", task)

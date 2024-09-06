@@ -1,4 +1,3 @@
-git+https://github.com/KimiNewt/pyshark.git
 pandas
 openpyxl
 mysql-connector-python
@@ -7,3 +6,4 @@ line_profiler
 pyahocorasick
 regex
 aiofiles
+git+https://github.com/KimiNewt/pyshark.git

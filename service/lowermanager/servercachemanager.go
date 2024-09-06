@@ -1,22 +1,22 @@
-package topmanager
+package lowermanager
 
 import (
 	"sync"
-	"webapp/service/lowermanager"
+	"webapp/service/models"
 )
 
 type ServerCacheQueue[useruidtype comparable, fileidtype comparable] struct {
-	Queue []*lowermanager.FileStatus[useruidtype, fileidtype]
+	Queue []*models.FileStatus[useruidtype, fileidtype]
 	lock  sync.RWMutex
 }
 
-func (m *ServerCacheQueue[useruidtype, fileidtype]) Push(file *lowermanager.FileStatus[useruidtype, fileidtype]) {
+func (m *ServerCacheQueue[useruidtype, fileidtype]) Push(file *models.FileStatus[useruidtype, fileidtype]) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.Queue = append(m.Queue, file)
 }
 
-func (m *ServerCacheQueue[useruidtype, fileidtype]) PushAndPopWhenFull(file *lowermanager.FileStatus[useruidtype, fileidtype], max int) *lowermanager.FileStatus[useruidtype, fileidtype] {
+func (m *ServerCacheQueue[useruidtype, fileidtype]) PushAndPopWhenFull(file *models.FileStatus[useruidtype, fileidtype], max int) *models.FileStatus[useruidtype, fileidtype] {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	if len(m.Queue) < max {
@@ -29,7 +29,7 @@ func (m *ServerCacheQueue[useruidtype, fileidtype]) PushAndPopWhenFull(file *low
 	return filetobedeleted
 }
 
-func (m *ServerCacheQueue[useruidtype, fileidtype]) Pop() (file *lowermanager.FileStatus[useruidtype, fileidtype]) {
+func (m *ServerCacheQueue[useruidtype, fileidtype]) Pop() (file *models.FileStatus[useruidtype, fileidtype]) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	res := m.Queue[0]
@@ -45,7 +45,7 @@ func (m *ServerCacheQueue[useruidtype, fileidtype]) Len() int {
 	return len(m.Queue)
 }
 
-func (m *ServerCacheQueue[useruidtype, fileidtype]) Top() *lowermanager.FileStatus[useruidtype, fileidtype] {
+func (m *ServerCacheQueue[useruidtype, fileidtype]) Top() *models.FileStatus[useruidtype, fileidtype] {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 	if len(m.Queue) > 0 {

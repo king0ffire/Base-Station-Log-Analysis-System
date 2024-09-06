@@ -3,34 +3,24 @@ package lowermanager
 
 import (
 	"sync"
+	"webapp/service/models"
 
 	"github.com/gorilla/sessions"
 )
 
-type WebSocketID interface {
-	WriteJSON(v interface{}) error
-	comparable
-}
-
-type WebSocketStatus[websocketidtype WebSocketID] struct {
-	Filter   string
-	Cookie   *sessions.Session
-	Socketid websocketidtype
-	Lock     sync.Mutex
-}
-type WebSocketStatusManager[websocketidtype WebSocketID] struct {
-	WebSocketStatus map[websocketidtype]*WebSocketStatus[websocketidtype]
+type WebSocketStatusManager[websocketidtype models.WebSocketID] struct {
+	WebSocketStatus map[websocketidtype]*models.WebSocketStatus[websocketidtype]
 	lock            sync.RWMutex
 }
 
 // key could be *websocket.Conn
-func NewWebSocketStatusManager[websocketidtype WebSocketID]() *WebSocketStatusManager[websocketidtype] {
-	return &WebSocketStatusManager[websocketidtype]{WebSocketStatus: make(map[websocketidtype]*WebSocketStatus[websocketidtype])}
+func NewWebSocketStatusManager[websocketidtype models.WebSocketID]() *WebSocketStatusManager[websocketidtype] {
+	return &WebSocketStatusManager[websocketidtype]{WebSocketStatus: make(map[websocketidtype]*models.WebSocketStatus[websocketidtype])}
 }
 
 func (m *WebSocketStatusManager[websocketidtype]) Add(key websocketidtype, filter string, cookie *sessions.Session) {
 	m.lock.Lock()
-	m.WebSocketStatus[key] = &WebSocketStatus[websocketidtype]{Filter: filter, Cookie: cookie, Socketid: key}
+	m.WebSocketStatus[key] = &models.WebSocketStatus[websocketidtype]{Filter: filter, Cookie: cookie, Socketid: key}
 	m.lock.Unlock()
 }
 func (m *WebSocketStatusManager[websocketidtype]) Delete(key websocketidtype) {
@@ -39,7 +29,7 @@ func (m *WebSocketStatusManager[websocketidtype]) Delete(key websocketidtype) {
 	m.lock.Unlock()
 }
 
-func (m *WebSocketStatusManager[websocketidtype]) Get(key websocketidtype) (*WebSocketStatus[websocketidtype], bool) {
+func (m *WebSocketStatusManager[websocketidtype]) Get(key websocketidtype) (*models.WebSocketStatus[websocketidtype], bool) {
 	m.lock.RLock()
 	v, ok := m.WebSocketStatus[key]
 	m.lock.RUnlock()
@@ -57,9 +47,9 @@ func (m *WebSocketStatusManager[websocketidtype]) Set(key websocketidtype, cooki
 	return false
 }
 
-func (m *WebSocketStatusManager[websocketidtype]) KeyAndValue() ([]websocketidtype, []*WebSocketStatus[websocketidtype]) {
+func (m *WebSocketStatusManager[websocketidtype]) KeyAndValue() ([]websocketidtype, []*models.WebSocketStatus[websocketidtype]) {
 	socketlist := []websocketidtype{}
-	statuslist := []*WebSocketStatus[websocketidtype]{}
+	statuslist := []*models.WebSocketStatus[websocketidtype]{}
 
 	m.lock.RLock()
 	for k, v := range m.WebSocketStatus {

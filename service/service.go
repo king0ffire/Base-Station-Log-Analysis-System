@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"webapp/dataaccess"
 	"webapp/service/lowermanager"
+	"webapp/service/models"
 	"webapp/service/topmanager"
 	"webapp/util"
 
@@ -16,10 +17,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func InitFileWithDBG[sessionidtype comparable, fileidtype comparable, websocketidtype lowermanager.WebSocketID](
+func InitFileWithDBG[sessionidtype comparable, fileidtype comparable, websocketidtype models.WebSocketID](
 	sessionmanager *topmanager.SessionStatusManager[sessionidtype, fileidtype, websocketidtype],
 	pythonprocessesmanager topmanager.PythonStatusManager[sessionidtype, fileidtype],
-	cachequeue *topmanager.ServerCacheQueue[sessionidtype, fileidtype],
+	cachequeue *lowermanager.ServerCacheQueue[sessionidtype, fileidtype],
 	fileuid fileidtype, filename string, uploadpath string, current int, max int, userid sessionidtype) {
 	filestatus := lowermanager.NewFileStatus[sessionidtype, fileidtype]()
 	filestatus.Dbgstatus.Lock.Lock()
@@ -33,11 +34,11 @@ func InitFileWithDBG[sessionidtype comparable, fileidtype comparable, websocketi
 	filestatus.Dbgstatus.Lock.Unlock()
 	logrus.Debugf("file %v released lock", filestatus.Uid)
 }
-func AddFileToMemory[sessionidtype comparable, fileidtype comparable, socketidtype lowermanager.WebSocketID](
+func AddFileToMemory[sessionidtype comparable, fileidtype comparable, socketidtype models.WebSocketID](
 	sessionmanager *topmanager.SessionStatusManager[sessionidtype, fileidtype, socketidtype],
 	pythonprocessesmanager topmanager.PythonStatusManager[sessionidtype, fileidtype],
-	cachequeue *topmanager.ServerCacheQueue[sessionidtype, fileidtype],
-	fileuid fileidtype, filename string, uploadpath string, current int, max int, userid sessionidtype, filestatus *lowermanager.FileStatus[sessionidtype, fileidtype]) {
+	cachequeue *lowermanager.ServerCacheQueue[sessionidtype, fileidtype],
+	fileuid fileidtype, filename string, uploadpath string, current int, max int, userid sessionidtype, filestatus *models.FileStatus[sessionidtype, fileidtype]) {
 	sessionmanager.AddFile(userid, fileuid, filestatus)
 	logrus.Debugf("fileid=%v added to filemangaer of user", filestatus.Uid)
 	dataaccess.DatabaseAddFileinfo(fileuid, userid)
@@ -46,11 +47,11 @@ func AddFileToMemory[sessionidtype comparable, fileidtype comparable, socketidty
 	logrus.Debugf("fileid=%v added to memory", filestatus.Uid)
 }
 
-func PushQueueAndDeleteOld[sessionidtype comparable, fileidtype comparable, socketidtype lowermanager.WebSocketID](
+func PushQueueAndDeleteOld[sessionidtype comparable, fileidtype comparable, socketidtype models.WebSocketID](
 	sessionmanager *topmanager.SessionStatusManager[sessionidtype, fileidtype, socketidtype],
 	pythonprocessesmanager topmanager.PythonStatusManager[sessionidtype, fileidtype],
-	cachequeue *topmanager.ServerCacheQueue[sessionidtype, fileidtype],
-	fileuid fileidtype, uploadpath string, userid sessionidtype, filestatus *lowermanager.FileStatus[sessionidtype, fileidtype]) {
+	cachequeue *lowermanager.ServerCacheQueue[sessionidtype, fileidtype],
+	fileuid fileidtype, uploadpath string, userid sessionidtype, filestatus *models.FileStatus[sessionidtype, fileidtype]) {
 	cache_queue_size, err := strconv.Atoi(util.ConfigMap["webapp"]["cache_queue_size"])
 	if err != nil {
 		logrus.Fatal("error parsing cache_queue_size:", err)
@@ -89,10 +90,10 @@ func PushQueueAndDeleteOld[sessionidtype comparable, fileidtype comparable, sock
 		ForceStopAndDeleteFile(filetobedeleted, uploadpath, usersession, pythonprocessesmanager, cachequeue)
 	}
 }
-func ParseidsFilebyCmd[sessionidtype comparable, fileidtype comparable, websocketidtype lowermanager.WebSocketID](
+func ParseidsFilebyCmd[sessionidtype comparable, fileidtype comparable, websocketidtype models.WebSocketID](
 	sessionmanager *topmanager.SessionStatusManager[sessionidtype, fileidtype, websocketidtype],
 	pythonprocessesmanager topmanager.PythonStatusManager[sessionidtype, fileidtype],
-	cachequeue *topmanager.ServerCacheQueue[sessionidtype, fileidtype], fileuid fileidtype, uploadpath string, userid sessionidtype) {
+	cachequeue *lowermanager.ServerCacheQueue[sessionidtype, fileidtype], fileuid fileidtype, uploadpath string, userid sessionidtype) {
 	stringuid := fmt.Sprintf("%v", fileuid)
 
 	usersession, ok := sessionmanager.Get(userid)
@@ -203,7 +204,7 @@ func AnnounceAllSocketsInUser[sessionidtype comparable, fileidtype comparable, s
 		}
 	}
 */
-func AnnounceAllSocketsInUser[sessionidtype comparable, fileidtype comparable, websocketidtype lowermanager.WebSocketID](
+func AnnounceAllSocketsInUser[sessionidtype comparable, fileidtype comparable, websocketidtype models.WebSocketID](
 	userid sessionidtype,
 	usersession *topmanager.SessionStatus[sessionidtype, fileidtype, websocketidtype]) {
 	logrus.Debug("announce all sockets in user: ", userid)
@@ -252,7 +253,7 @@ func AnnounceAllSocketsInUser[sessionidtype comparable, fileidtype comparable, w
 	}
 */
 
-func NewUserintoMemory[socketidtype lowermanager.WebSocketID, fileidtype comparable](w http.ResponseWriter, r *http.Request,
+func NewUserintoMemory[socketidtype models.WebSocketID, fileidtype comparable](w http.ResponseWriter, r *http.Request,
 	cook *sessions.Session, sessionmanager *topmanager.SessionStatusManager[string, fileidtype, socketidtype]) {
 	util.GenerateNewId(w, r, cook)
 	userid, ok := util.CookieGet(r).Values["id"].(string)
@@ -271,9 +272,9 @@ func NewUserintoMemory[socketidtype lowermanager.WebSocketID, fileidtype compara
 	logrus.Debug("Add User:", userid)
 }
 
-func ConstructJSONHandle[sessionidtype comparable, fileidtype comparable, websocketidtype lowermanager.WebSocketID](
+func ConstructJSONHandle[sessionidtype comparable, fileidtype comparable, websocketidtype models.WebSocketID](
 	pythonmanager topmanager.PythonStatusManager[sessionidtype, fileidtype],
-	cachequeue *topmanager.ServerCacheQueue[sessionidtype, fileidtype],
+	cachequeue *lowermanager.ServerCacheQueue[sessionidtype, fileidtype],
 	sessionmanager *topmanager.SessionStatusManager[sessionidtype, fileidtype, websocketidtype],
 	cache_location string) func(int, []byte) {
 	return func(n int, jsondump []byte) {

@@ -11,12 +11,13 @@ import sys
 import tarfile
 import json
 import time
+from line_profiler import profile
 import configparser
 import traceback
 
 
 
-
+@profile
 def run(filemeta, dbconn, cachelocation, mode=0):
     fileuid = filemeta["fileuid"]
     filelocation = os.path.join(cachelocation, fileuid + ".tar.gz")
@@ -79,12 +80,12 @@ def run(filemeta, dbconn, cachelocation, mode=0):
     logger.debug("dbg analisis finished, dbg file wont open again")
 
     # 单独的线程- 2<-1
-    from category import get_tagfromcsv
+    from core.category import get_tagfromcsv
 
     countmap = Counter([tup[4] for tup in formatteditems])
-    # categories = get_category(os.path.join(os.path.dirname(sys.argv[0]), r"dbg信令分类_唯一分类.xlsx"))
+    # categories = get_category(os.path.join(os.path.dirname(sys.argv[0]), r"data/dbg信令分类_唯一分类.xlsx"))
     tags = get_tagfromcsv(
-        os.path.join(os.path.dirname(sys.argv[0]), r"dbg信令分类_唯一分类.csv")
+        os.path.join(os.path.dirname(sys.argv[0]), r"data/dbg信令分类_唯一分类.csv")
     )  # not including non-categorized
 
     dbgfileinfo = constructdbgcsv(countmap, tags)
@@ -134,53 +135,53 @@ def run(filemeta, dbconn, cachelocation, mode=0):
 
 def processfiledbg(task_status, clientsocket: socket.socket, dbpool, filemetajson, cachelocation):
     starttime = time.time()
-    if filemetajson["state"] == enumerate.State.Canceled:
+    if filemetajson["state"] == enumtypes.State.Canceled:
         logger.info(f"{filemetajson['fileuid']}:dbg analysis canceled eariler, stop")
         message = json.dumps(
             {
                 "useruid": filemetajson["useruid"],
                 "fileuid": filemetajson["fileuid"],
                 "task": filemetajson["task"],
-                "state": enumerate.State.Canceled.name,
+                "state": enumtypes.State.Canceled.name,
             }
         )
     else:
         conn = dbpool.get_connection()
         try:
-            filemetajson["state"] =enumerate.State.Running
+            filemetajson["state"] =enumtypes.State.Running
             logger.info(f"{filemetajson['fileuid']}:dbg analysis start")
             run(filemetajson, conn, cachelocation, 0)
             logger.info(f"{filemetajson['fileuid']}:dbg analysis success")
-            if filemetajson["state"]==enumerate.State.Canceled:
-                filemetajson["state"]=enumerate.State.Terminited
+            if filemetajson["state"]==enumtypes.State.Canceled:
+                filemetajson["state"]=enumtypes.State.Terminited
                 message = json.dumps(
                     {
                         "useruid": filemetajson["useruid"],
                         "fileuid": filemetajson["fileuid"],
                         "task": filemetajson["task"],
-                        "state": enumerate.State.Terminited.name,
+                        "state": enumtypes.State.Terminited.name,
                     }
                 )
                 remove_cache.removelocaldirectory(cachelocation,filemetajson["fileuid"])
                 logger.info(f"{filemetajson['fileuid']}:dbg analysis canceled eariler, changing to terminated")
             else:
-                filemetajson["state"] =enumerate.State.Success
+                filemetajson["state"] =enumtypes.State.Success
                 message = json.dumps(
                     {
                         "useruid": filemetajson["useruid"],
                         "fileuid": filemetajson["fileuid"],
                         "task": filemetajson["task"],
-                        "state": enumerate.State.Success.name,
+                        "state": enumtypes.State.Success.name,
                     }
                 )
         except Exception as e:
-            filemetajson["state"] =enumerate.State.Failed
+            filemetajson["state"] =enumtypes.State.Failed
             message = json.dumps(
                 {
                     "useruid": filemetajson["useruid"],
                     "fileuid": filemetajson["fileuid"],
                     "task": filemetajson["task"],
-                    "state": enumerate.State.Failed.name,
+                    "state": enumtypes.State.Failed.name,
                     "error": str(e),
                 }
             )
@@ -207,7 +208,7 @@ def parsejsondata(
     if "Stop" == filemetajson["action"]:
         if filemetajson["fileuid"] in task_status:
             if filemetajson["task"]=="Dbg":
-                filemetajson["state"]=enumerate.State.Canceled
+                filemetajson["state"]=enumtypes.State.Canceled
                 logger.info(f"{filemetajson['fileuid']}:dbg analysis canceled")  
         else:
             message = json.dumps(
@@ -215,7 +216,7 @@ def parsejsondata(
                     "useruid": filemetajson["useruid"],
                     "fileuid": filemetajson["fileuid"],
                     "task": filemetajson["task"],
-                    "state": enumerate.State.Failed.name,
+                    "state": enumtypes.State.Failed.name,
                 }
             )
             client_socket.sendall((message+"\n").encode("utf-8"))
@@ -223,7 +224,7 @@ def parsejsondata(
     elif "Start"==filemetajson["action"]:
         if filemetajson["task"] == "Dbg":
             task_status[filemetajson["fileuid"]] = filemetajson
-            filemetajson["state"] = enumerate.State.Pending
+            filemetajson["state"] = enumtypes.State.Pending
             dbgTaskListener.put(task_status,client_socket, dbpool, filemetajson, cachelocation)
             logger.info(f"{filemetajson['fileuid']}:dbg analysis pending")
         elif filemetajson["task"] == "sctp":
@@ -311,10 +312,10 @@ if __name__ == "__main__":
     queue_listener = configure_logger(config["file"]["cache_path"])
     queue_listener.start()
     logger = logging.getLogger(__name__)
-    from aiosql import DatabaseConnectionPool, createmysiambyconn
-    from util import mapget, DBWriter, QueueListener
-    from dbcount import constructdbgcsv, Parsefilelist_4
-    import enumerate
+    from dataaccess.aiosql import DatabaseConnectionPool, createmysiambyconn
+    from core.task_queue import mapget, DBWriter, QueueListener
+    from core.dbglog import constructdbgcsv, Parsefilelist_4
+    import util.enumtypes as enumtypes
     import remove_cache
     try:
         startserver(config["file"]["cache_path"])

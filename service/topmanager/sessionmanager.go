@@ -3,21 +3,22 @@ package topmanager
 import (
 	"sync"
 	"webapp/service/lowermanager"
+	"webapp/service/models"
 
 	"github.com/gorilla/sessions"
 )
 
-type SessionStatus[sessionidtype comparable, fileidtype comparable, websocketidtype lowermanager.WebSocketID] struct {
+type SessionStatus[sessionidtype comparable, fileidtype comparable, websocketidtype models.WebSocketID] struct {
 	FileStatusManager      *lowermanager.FileStatusManager[sessionidtype, fileidtype]
 	WebSocketstatusManager *lowermanager.WebSocketStatusManager[websocketidtype]
 }
 
-type SessionStatusManager[sessionidtype comparable, fileidtype comparable, websocketidtype lowermanager.WebSocketID] struct {
+type SessionStatusManager[sessionidtype comparable, fileidtype comparable, websocketidtype models.WebSocketID] struct {
 	SessionStatus map[sessionidtype]*SessionStatus[sessionidtype, fileidtype, websocketidtype]
 	lock          sync.RWMutex
 }
 
-func NewSessionStatusManager[sessionidtype comparable, fileidtype comparable, websocketidtype lowermanager.WebSocketID]() *SessionStatusManager[sessionidtype, fileidtype, websocketidtype] {
+func NewSessionStatusManager[sessionidtype comparable, fileidtype comparable, websocketidtype models.WebSocketID]() *SessionStatusManager[sessionidtype, fileidtype, websocketidtype] {
 	return &SessionStatusManager[sessionidtype, fileidtype, websocketidtype]{SessionStatus: make(map[sessionidtype]*SessionStatus[sessionidtype, fileidtype, websocketidtype])}
 }
 
@@ -32,7 +33,7 @@ func (m *SessionStatusManager[sessionidtype, fileidtype, websocketidtype]) Delet
 	m.lock.Unlock()
 }
 
-func (m *SessionStatusManager[sessionidtype, fileidtype, websocketidtype]) AddFile(sessionid sessionidtype, fileuid fileidtype, filestatus *lowermanager.FileStatus[sessionidtype, fileidtype]) {
+func (m *SessionStatusManager[sessionidtype, fileidtype, websocketidtype]) AddFile(sessionid sessionidtype, fileuid fileidtype, filestatus *models.FileStatus[sessionidtype, fileidtype]) {
 	m.lock.RLock()
 	m.SessionStatus[sessionid].FileStatusManager.Add(fileuid, filestatus)
 	m.lock.RUnlock()
@@ -50,13 +51,13 @@ func (m *SessionStatusManager[sessionidtype, fileidtype, websocketidtype]) Get(k
 	m.lock.RUnlock()
 	return v, ok
 }
-func (m *SessionStatusManager[sessionidtype, fileidtype, websocketidtype]) FileKeyAndValue(key sessionidtype) ([]fileidtype, []*lowermanager.FileStatus[sessionidtype, fileidtype]) {
+func (m *SessionStatusManager[sessionidtype, fileidtype, websocketidtype]) FileKeyAndValue(key sessionidtype) ([]fileidtype, []*models.FileStatus[sessionidtype, fileidtype]) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 	return m.SessionStatus[key].FileStatusManager.KeyAndValue()
 }
 
-func (m *SessionStatusManager[sessionidtype, fileidtype, websocketidtype]) WebSocketKeyAndValue(key sessionidtype) ([]websocketidtype, []*lowermanager.WebSocketStatus[websocketidtype]) {
+func (m *SessionStatusManager[sessionidtype, fileidtype, websocketidtype]) WebSocketKeyAndValue(key sessionidtype) ([]websocketidtype, []*models.WebSocketStatus[websocketidtype]) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 	return m.SessionStatus[key].WebSocketstatusManager.KeyAndValue()

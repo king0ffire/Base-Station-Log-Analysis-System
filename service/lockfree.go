@@ -6,16 +6,17 @@ import (
 	"path/filepath"
 	"webapp/dataaccess"
 	"webapp/service/lowermanager"
+	"webapp/service/models"
 	"webapp/service/topmanager"
 	"webapp/util"
 
 	"github.com/sirupsen/logrus"
 )
 
-func OldFileCollection[sessionidtype comparable, fileidtype comparable, websocketidtype lowermanager.WebSocketID](
+func OldFileCollection[sessionidtype comparable, fileidtype comparable, websocketidtype models.WebSocketID](
 	sessionmanager *topmanager.SessionStatusManager[sessionidtype, fileidtype, websocketidtype],
 	pythonmanager topmanager.PythonStatusManager[sessionidtype, fileidtype],
-	cachequeue *topmanager.ServerCacheQueue[sessionidtype, fileidtype],
+	cachequeue *lowermanager.ServerCacheQueue[sessionidtype, fileidtype],
 	fileuid fileidtype, uploadpath string, userid sessionidtype) {
 	logrus.Debug("during processing ", fileuid, ", current cache queue length: ", cachequeue.Len())
 	if cachequeue.Len() > 5 {
@@ -39,11 +40,11 @@ func ScheduleForceStopAndDeleteFile[sessionidtype comparable, fileidtype compara
 	logrus.Debug("scheduled stop for: ", filestatus.Uid)
 }*/
 
-func ForceStopAndDeleteFile[sessionidtype comparable, fileidtype comparable, websocketidtype lowermanager.WebSocketID](
-	filestatus *lowermanager.FileStatus[sessionidtype, fileidtype], uploadpath string,
+func ForceStopAndDeleteFile[sessionidtype comparable, fileidtype comparable, websocketidtype models.WebSocketID](
+	filestatus *models.FileStatus[sessionidtype, fileidtype], uploadpath string,
 	usersession *topmanager.SessionStatus[sessionidtype, fileidtype, websocketidtype],
 	pythonmanager topmanager.PythonStatusManager[sessionidtype, fileidtype],
-	cachequeue *topmanager.ServerCacheQueue[sessionidtype, fileidtype]) { //should use with lock filestatus
+	cachequeue *lowermanager.ServerCacheQueue[sessionidtype, fileidtype]) { //should use with lock filestatus
 	logrus.Debugf("force stop and delete file %v", filestatus.Uid)
 	pythonmanager.Stop(filestatus)
 	pythonmanager.Delete(filestatus)
@@ -64,10 +65,10 @@ func ForceStopAndDeleteFile[sessionidtype comparable, fileidtype comparable, web
 	}
 }
 
-func ParsedbgFile[sessionidtype comparable, fileidtype comparable, socketidtype lowermanager.WebSocketID](
+func ParsedbgFile[sessionidtype comparable, fileidtype comparable, socketidtype models.WebSocketID](
 	sessionmanager *topmanager.SessionStatusManager[sessionidtype, fileidtype, socketidtype],
 	pythonstatusmanager topmanager.PythonStatusManager[sessionidtype, fileidtype],
-	cachequeue *topmanager.ServerCacheQueue[sessionidtype, fileidtype], fileuid fileidtype, uploadpath string, userid sessionidtype) {
+	cachequeue *lowermanager.ServerCacheQueue[sessionidtype, fileidtype], fileuid fileidtype, uploadpath string, userid sessionidtype) {
 
 	usersession, ok := sessionmanager.Get(userid)
 	if !ok {

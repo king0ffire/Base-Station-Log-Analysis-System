@@ -110,6 +110,7 @@ def sctpanalysis(csvfile_id,csvwriter_id, sctp_file_list,cache_path,filter1,filt
         print("multithread success")
     logger.info("sctp finished")
 
+@profile
 # mode 0 is single thread， mode 1 is multithread
 def run(filelocation, mode=0):
     filter1 = "s1ap.MME_UE_S1AP_ID"

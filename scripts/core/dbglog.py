@@ -452,7 +452,7 @@ def Parsefilelist_3(pool,precompiledsql, filelist, listoffour, mode=0):
             for i in range(2):
                 countlist[i] += r2[i]
         conn.commit()
-        conn.close()
+        pool.close_connection(conn)
     elif mode == 1:
         try:
             with ThreadPoolExecutor(max_workers=6) as executor:
@@ -481,7 +481,7 @@ def Parsefilelist_3(pool,precompiledsql, filelist, listoffour, mode=0):
                 for i in range(2):
                     countlist[i] += future.result()[1][i]
         conn.commit()
-        conn.close()
+        pool.close_connection(conn)
     elif mode == 3:
         global aiofiles
         import aiofiles
@@ -494,7 +494,7 @@ def Parsefilelist_3(pool,precompiledsql, filelist, listoffour, mode=0):
             for i in range(2):
                 countlist[i] += r2[i]
         conn.commit()
-        conn.close()
+        pool.close_connection(conn)
     return formattedItems, countlist
 def lineswithpattern_patternlist_5(database_writer,filename, listoffour):
     try:
