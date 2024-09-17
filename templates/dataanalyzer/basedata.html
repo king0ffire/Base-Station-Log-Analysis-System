@@ -44,22 +44,22 @@
       cell1.setAttribute("class", "text-center")
 
       if (dbgstatus["State"] == "Failed") {
-        cell2.innerHTML = "崩溃啦";
+        cell2.innerHTML = "Crushed";
       } else if (dbgstatus["State"] == "Finished") {
-        cell2.innerHTML = "已完成";
+        cell2.innerHTML = "Finished";
       } else {
-        cell2.innerHTML = "处理中";
+        cell2.innerHTML = "Processing";
       }
       cell2.setAttribute("class", "text-center")
 
       if (idsstatus["State"] == "Failed") {
-        cell3.innerHTML = "崩溃啦";
+        cell3.innerHTML = "Crushed";
       } else if (idsstatus["State"] == "Running") {
-        cell3.innerHTML = "已处理" + idsstatus["Currentvalue"] / idsstatus["Maxvalue"] * 100 + "%";
+        cell3.innerHTML = "Processing" + idsstatus["Currentvalue"] / idsstatus["Maxvalue"] * 100 + "%";
       } else if (idsstatus["State"] == "Finished") {
-        cell3.innerHTML = "已完成";
+        cell3.innerHTML = "Finished";
       } else {
-        cell3.innerHTML = "未开始";
+        cell3.innerHTML = "Not Scheduled";
       }
       cell3.setAttribute("class", "text-center")
 
@@ -69,26 +69,26 @@
       button1.addEventListener("click", function () {
         window.location.href = "/results/dbg?fileid=" + uid
       })
-      button1.innerHTML = "查看dbglog文件统计";
+      button1.innerHTML = "DBGLOG Analysis";
       if (dbgstatus["State"]!="Finished")
       {
         button2.setAttribute("class", "btn btn-info")
-        button2.innerHTML = "请等待dbglog分析完成";
+        button2.innerHTML = "Please wait DBGLOG processing";
       }else if (idsstatus["State"] == "Finished") {
         button2.setAttribute("class", "btn btn-success")
         button2.addEventListener("click", function () {
           window.location.href = "/results/ids?fileid=" + uid
         })
-        button2.innerHTML = "查看sctp文件统计";
+        button2.innerHTML = "Wireshark Capture Analysis";
       }else if (idsstatus["State"] == "Created") {
         button2.setAttribute("class", "btn btn-info")
         button2.addEventListener("click", function () {
           myWebSocket.send(uid);
         })
-        button2.innerHTML = "开始解析sctp";
+        button2.innerHTML = "Start to parse S1AP data";
       } else {
         button2.setAttribute("class", "btn btn-info")
-        button2.innerHTML = "解析中";
+        button2.innerHTML = "Analyzing";
       }
 
       cell4.appendChild(button1);
@@ -106,7 +106,7 @@
     };
 
     function comfirmandget() {
-      var result = confirm("全部删除？");
+      var result = confirm("Delete All?");
       if (result) {
         myWebSocket.send("clearcache");
       }
@@ -118,21 +118,21 @@
 <body>
   <br>
   <div class="container">
-    <h2 class="text-center">数据包基本信息</h2>
+    <h2 class="text-center">Base Info</h2>
   </div>
   <br>
 
   <div class="container">
     <form class="form-inline" method="get" action="/uploadedfiles">
       <div class="form-group">
-        <label for="proto">文件名过滤 : </label>&nbsp;&nbsp;
+        <label for="proto">File Name Filter : </label>&nbsp;&nbsp;
         <input type="text" class="form-control" id="proto" name="filename" value="">&nbsp;&nbsp;
       </div>
-      <button type="submit" class="btn btn-success">&nbsp;过&nbsp;&nbsp;&nbsp;滤&nbsp;</button>&nbsp;&nbsp;
-      <button type="submit" class="btn btn-info cancle">&nbsp;清&nbsp;&nbsp;&nbsp;除&nbsp;</button>&nbsp;&nbsp;
+      <button type="submit" class="btn btn-success">Confirm</button>&nbsp;&nbsp;
+      <button type="submit" class="btn btn-info cancle">Clear</button>&nbsp;&nbsp;
 
     </form>
-    <button class="btn btn-danger" onclick="comfirmandget()">&nbsp;删除所有缓存&nbsp;</button>&nbsp;&nbsp;
+    <button class="btn btn-danger" onclick="comfirmandget()">&nbsp;Clear All Cache&nbsp;</button>&nbsp;&nbsp;
   </div>
 
   <br>
@@ -140,10 +140,10 @@
     <table class="table table-hover table-responsive  table-condensed table-striped" id="table">
       <thead>
         <tr>
-          <th class="text-center">文件名</th>
-          <th class="text-center">dbglog文件处理状态</th>
-          <th class="text-center">sctp文件处理状态</th>
-          <th class="text-center">操作</th>
+          <th class="text-center">File Name</th>
+          <th class="text-center">DBGLOG Status</th>
+          <th class="text-center">Wireshark dump Status</th>
+          <th class="text-center">Action</th>
         </tr>
       </thead>
       <tbody>

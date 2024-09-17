@@ -1,6 +1,5 @@
 scripts/__pycache__/*
 cache/*
-example/*
 other/*
 other/test.go
 *log

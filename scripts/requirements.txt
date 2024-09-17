@@ -6,4 +6,3 @@ line_profiler
 pyahocorasick
 regex
 aiofiles
-git+https://github.com/KimiNewt/pyshark.git
