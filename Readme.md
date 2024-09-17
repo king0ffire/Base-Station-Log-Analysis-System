@@ -1,12 +1,29 @@
+# Demo Site
+
+You can access the demo site here:[Demo Website](http://117.72.83.134:9090/)
+
+This is a demo site, and some features may not work fully outside the company network. The server is in China, so file uploads may be slow.
+
+# Screenshots
+
+![](./imgs/YOX{~_TPTM7Y(7BN41JH)YX.png)
+
+![](./imgs/BXMXPM{JT[1UR6PMR05]``4.png)
+
+![](./imgs/NO$KCW35AF6F}SV[\(YOK@Z0.png)
+
+![](./imgs/6GWBEYCTZCMQ0G{K$G@6L8Y.png)
+
+![](./imgs/9686OCO0@}T50D_VN47QL7X.png)
 # Prerequisites
 
-tshark
+Wireshark and tshark
 
-mysql=5.7
+MySQL=5.7
 
-golang>=1.22.5
+Golang>=1.22.5
 
-python=3.11
+Python=3.11
 
 # How to Run
 

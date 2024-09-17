@@ -242,6 +242,7 @@ def startserver(cachelocation):
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind((config["socket"]["host"], int(config["socket"]["port"])))
+    s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
     s.listen(5)
     logger.info("server started to listen")
     with ThreadPoolExecutor() as executor:

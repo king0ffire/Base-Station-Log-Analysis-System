@@ -11,9 +11,12 @@ class DatabaseConnectionPool:
     def __init__(self,pool_size=12):
         self.pool=queue.Queue(pool_size)
         logger.info("start sql")
-
+        mysqlconfig={key:value for key,value in config["database"].items()}
+        for key,value in mysqlconfig.items():
+            if value.lower() in ('true','false'):
+                mysqlconfig[key]=value.lower()=='true'
         with ThreadPoolExecutor() as executor:
-            fs=[executor.submit(mysql.connector.connect,**(config["database"])) for _ in range(pool_size)]
+            fs=[executor.submit(mysql.connector.connect,**(mysqlconfig)) for _ in range(pool_size)]
             for f in as_completed(fs):
                 self.pool.put(f.result())
         logger.info("connection created")
