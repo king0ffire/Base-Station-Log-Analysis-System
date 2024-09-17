@@ -255,7 +255,8 @@ def startserver(cachelocation):
                 while True:
                     bytedump = client_socket.recv(1024)
                     if not bytedump:
-                        raise Exception("Empty data received, close current socket")
+                        logger.info("Empty data received, close current socket")
+                        break
                     jsondumps = bytedump.decode()
                     buffer += jsondumps
                     logger.debug(f"received from client:{repr(jsondumps)}")
